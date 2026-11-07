@@ -8,6 +8,10 @@ export async function GET(request: NextRequest) {
   const code = params.get('code');
   const token_hash = params.get('token_hash');
   const type = params.get('type');
+  // Default Supabase email templates can return tokens in the URL fragment.
+  // Browsers preserve that fragment across this redirect; only the client can
+  // read it. The server never receives or logs it.
+  if (!code && !token_hash) return NextResponse.redirect(new URL('/auth/complete',request.url));
   if (code) { const { error } = await db.auth.exchangeCodeForSession(code); if(!error) return NextResponse.redirect(new URL('/?password=1',request.url)); }
   if (token_hash && type && ['invite','recovery'].includes(type)) {
     const { error } = await db.auth.verifyOtp({ token_hash,type:type as EmailOtpType });

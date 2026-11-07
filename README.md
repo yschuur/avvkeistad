@@ -34,7 +34,7 @@ De databasetest voert de daadwerkelijke migratie uit in een geïsoleerde Postgre
 <a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=invite">Account activeren</a>
 ```
 
-Dit is verplicht voor uitnodigingen die op een ander apparaat worden geopend. De callback accepteert token-hash-uitnodigingen en PKCE-codes; hij verwerkt geen access tokens in URL-fragmenten.
+Token-hash-links worden aanbevolen en werken ook op een ander apparaat. De callback accepteert token-hash-links en PKCE-codes. De standaard Supabase-template met sessietokens in het URL-fragment wordt ook ondersteund: de browser controleert de sessie met Supabase en verwijdert het fragment uit de adresgeschiedenis.
 
 ## 2. Eerste admin
 
@@ -103,3 +103,13 @@ Navigatie heeft directe laadfeedback en een streaming laadscherm. Serveractiekno
 `npm run test:performance` start na een productiebuild een tijdelijke Next-server op poort 3011 en een lokale mock van de Supabase HTTP API. Met tijdelijk gegenereerde ondertekende testtokens en 150 ms nagebootste API-latentie controleert deze test onder meer parallel laden, aantallen API-verzoeken, filtering, gebruikersisolatie, ondertekende JWT-verificatie, redirects en directe knop-/navigatiefeedback. Er worden geen echte accounts of credentials gebruikt. Dit is geen meting van Vercel of de live Supabase-regio. `PERFORMANCE_TEST_PORT` kan een andere vrije poort kiezen; Chromium wordt via `CHROMIUM_PATH` ingesteld.
 
 Vercel voert de serverfuncties volgens `vercel.json` uit in Dublin (`dub1`), nabij de door de gebruiker bevestigde Supabase-regio West EU (Ireland). Na een wijziging van de Supabase-regio moet deze instelling opnieuw worden beoordeeld. De instelling wordt bij de volgende Vercel-deployment toegepast; lokale tests meten geen productielatentie.
+
+## Bestaand account herstellen
+
+Open `/login` en kies **Wachtwoord vergeten?**. De app vraagt een herstelmail aan voor het bestaande account; rollen, teamindeling en punten veranderen niet. `NEXT_PUBLIC_SITE_URL` moet naar de vaste app-URL wijzen, en die URL met `/auth/confirm` moet als Supabase Auth redirect zijn toegestaan. De standaard Supabase-hersteltemplate werkt via deze flow. Een directe token-hash-template is ook mogelijk:
+
+```html
+<a href="{{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=recovery">Wachtwoord herstellen</a>
+```
+
+Bij de nieuwe link kun je een wachtwoord van minimaal 12 tekens instellen. Een succesvolle aanvraag toont dezelfde tekst voor bestaande en onbekende adressen. De e-mailaflevering blijft afhankelijk van Supabase SMTP en verzendlimieten; de lokale integratietest verstuurt geen echte e-mail. Inlogmeldingen onderscheiden onjuiste credentials, onbevestigd e-mailadres, blokkering, rate limits en tijdelijke onbereikbaarheid zonder providerdetails of sleutels te tonen. Wachtwoorden worden exact doorgegeven, inclusief eventuele spaties aan begin en einde.

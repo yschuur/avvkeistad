@@ -9,11 +9,13 @@ import { createServerClient } from '@supabase/ssr';
 import { chromium } from 'playwright-core';
 const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
 const jwk={...publicKey.export({format:'jwk'}),kid:'local-performance-test',alg:'ES256',use:'sig'};
-const memberA='10000000-0000-4000-8000-000000000001', memberB='10000000-0000-4000-8000-000000000002';
+const memberA='10000000-0000-4000-8000-000000000001', memberB='10000000-0000-4000-8000-000000000002', admin='10000000-0000-4000-8000-000000000003';
 const season='20000000-0000-4000-8000-000000000001';
 const records=[];
+const authWrites=[];
+const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
 let mockUrl;
-const profile=id=>({id,first_name:id===memberA?'Anna':'Bram',last_name:'Test',email:id===memberA?'anna@example.test':'bram@example.test',role:'member',referee_level:0,nevobo_code:null});
+const profile=id=>({id,first_name:id===admin?'Alex':id===memberA?'Anna':'Bram',last_name:'Test',email:id===admin?'admin@example.test':id===memberA?'anna@example.test':'bram@example.test',role:id===admin?'admin':'member',referee_level:0,nevobo_code:null});
 const token=id=>{
  const header=Buffer.from(JSON.stringify({alg:'ES256',typ:'JWT',kid:jwk.kid})).toString('base64url');
  const payload=Buffer.from(JSON.stringify({sub:id,role:'authenticated',iss:mockUrl+'/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),session_id:'40000000-0000-4000-8000-000000000001'})).toString('base64url');
@@ -25,12 +27,27 @@ const mock=createServer(async(req,res)=>{
  let body='';for await(const chunk of req) body+=chunk;
  await new Promise(resolve=>setTimeout(resolve,150));
  res.setHeader('Content-Type','application/json');
+ res.setHeader('Access-Control-Allow-Origin','*');
+ res.setHeader('Access-Control-Allow-Headers','authorization, apikey, content-type, x-client-info, x-supabase-api-version');
+ res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,OPTIONS');
+ if(req.method==='OPTIONS') return res.end();
+ if(body) authWrites.push({path:url.pathname,body:JSON.parse(body)});
+ if(url.pathname.endsWith('/recover') || url.pathname.endsWith('/logout')) return res.end('{}');
  if(url.pathname.endsWith('/.well-known/jwks.json')) return res.end(JSON.stringify({keys:[jwk]}));
- if(url.pathname.endsWith('/token')) {
-  const id=JSON.parse(body).email==='bram@example.test'?memberB:memberA;
+ if(url.pathname.endsWith('/token') || url.pathname.endsWith('/verify')) {
+  const input=JSON.parse(body);
+  if(url.pathname.endsWith('/token') && passwords.get(input.email)!==input.password) {
+   res.statusCode=400;return res.end(JSON.stringify({code:'invalid_credentials',msg:'Invalid login credentials'}));
+  }
+  const id=url.pathname.endsWith('/verify') || input.email==='admin@example.test'?admin:input.email==='bram@example.test'?memberB:memberA;
   return res.end(JSON.stringify({access_token:token(id),token_type:'bearer',expires_in:3600,refresh_token:'local-test-refresh',user:{...profile(id),aud:'authenticated',app_metadata:{provider:'email'},user_metadata:{},created_at:new Date().toISOString()}}));
  }
- if(url.pathname.endsWith('/user')) return res.end(JSON.stringify(profile(memberA)));
+ if(url.pathname.endsWith('/user')) {
+  const jwt=req.headers.authorization?.split(' ')[1];
+  const id=jwt?JSON.parse(Buffer.from(jwt.split('.')[1],'base64url').toString()).sub:memberA;
+  if(req.method==='PUT' && JSON.parse(body).password) passwords.set(profile(id).email,JSON.parse(body).password);
+  return res.end(JSON.stringify(profile(id)));
+ }
  let result=[];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
@@ -40,7 +57,7 @@ const mock=createServer(async(req,res)=>{
  res.end(JSON.stringify(result));
 });
 mock.listen(0,'127.0.0.1');await once(mock,'listening');mockUrl=`http://127.0.0.1:${mock.address().port}`;
-const port=Number(process.env.PERFORMANCE_TEST_PORT ?? 3011),base=`http://127.0.0.1:${port}`;
+const port=Number(process.env.PERFORMANCE_TEST_PORT ?? 3011),base=`http://localhost:${port}`;
 const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:mockUrl,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_local_test',NEXT_PUBLIC_SITE_URL:base},stdio:['ignore','pipe','pipe']});
 let logs='';app.stdout.on('data',d=>logs+=d);app.stderr.on('data',d=>logs+=d);
 let browser;
@@ -106,6 +123,45 @@ try {
  await page.getByRole('link',{name:'Wedstrijden',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
  release();await page.waitForURL('**/wedstrijden');await page.getByRole('heading',{name:'Het wedstrijdprogramma'}).waitFor();
+ // Exercise the original admin flow, rejected credentials and both email-link formats.
+ const adminPage=await browser.newPage();adminPage.setDefaultTimeout(10000);await adminPage.goto(base+'/login');
+ await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
+ await adminPage.getByLabel('Wachtwoord',{exact:true}).fill('wrong-test-password');
+ await adminPage.getByRole('button',{name:'Inloggen'}).click();
+ await adminPage.getByRole('alert').filter({hasText:'wachtwoord niet herkend'}).waitFor();
+ await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
+ await adminPage.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');
+ await adminPage.getByRole('button',{name:'Inloggen'}).click();
+ await adminPage.waitForURL(base+'/');await adminPage.getByRole('heading',{name:/Hoi Alex/}).waitFor();
+ await adminPage.getByRole('link',{name:'Beheer',exact:true}).click();
+ await adminPage.getByRole('heading',{name:'Samen goed geregeld'}).waitFor();
+ await adminPage.goto(base+'/wachtwoord-vergeten');
+ await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
+ await adminPage.getByRole('button',{name:'Herstelmail aanvragen'}).click();
+ await adminPage.getByRole('status').filter({hasText:'Als er een account'}).waitFor();
+ await adminPage.goto(base+'/wachtwoord-vergeten');
+ await adminPage.getByLabel('E-mailadres').fill('unknown@example.test');
+ await adminPage.getByRole('button',{name:'Herstelmail aanvragen'}).click();
+ await adminPage.getByRole('status').filter({hasText:'Als er een account'}).waitFor();
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/recover')).length,2);
+ await adminPage.goto(base+'/auth/confirm#access_token='+encodeURIComponent(token(admin))+'&refresh_token=local-test-refresh&type=recovery');
+ await adminPage.waitForURL('**/?password=1');
+ await adminPage.getByRole('heading',{name:'Maak je account compleet'}).waitFor();
+ assert.equal(new URL(adminPage.url()).hash,'');
+ const newPassword=' local-test-password-with-spaces ';
+ await adminPage.getByLabel('Nieuw wachtwoord').fill(newPassword);
+ await adminPage.getByRole('button',{name:'Wachtwoord instellen'}).click();
+ await adminPage.getByRole('status').filter({hasText:'Opgeslagen'}).waitFor();
+ assert.equal(passwords.get('admin@example.test'),newPassword);
+ await adminPage.getByRole('button',{name:'Uitloggen'}).click();
+ await adminPage.waitForURL('**/login');
+ await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
+ await adminPage.getByLabel('Wachtwoord',{exact:true}).fill(newPassword);
+ await adminPage.getByRole('button',{name:'Inloggen'}).click();
+ await adminPage.waitForURL(base+'/');await adminPage.getByRole('heading',{name:/Hoi Alex/}).waitFor();
+ await adminPage.goto(base+'/auth/confirm?token_hash=local-test-recovery&type=recovery');
+ await adminPage.waitForURL('**/?password=1');await adminPage.getByRole('heading',{name:'Maak je account compleet'}).waitFor();
+ console.log('Auth-integratie geslaagd: admin inloggen/beheer, onjuiste credentials, herstelmail zonder accountonthulling, standaard- en token-hash-herstellinks, wachtwoord wijzigen en opnieuw inloggen met exacte wachtwoordtekens. Geen echte e-mails verstuurd.');
  console.log(`Performance-integratie geslaagd: dashboard 8 API-requests (${dashboard.ms}ms), wedstrijden 5 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);
 } finally {
  if(browser) await browser.close();app.kill('SIGTERM');mock.closeAllConnections();await new Promise(resolve=>mock.close(resolve));

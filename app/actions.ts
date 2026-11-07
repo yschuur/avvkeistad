@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { fromZonedTime } from 'date-fns-tz';
 import { z } from 'zod';
 import { configured, supabase } from '@/lib/supabase/server';
+import { loginError } from '@/lib/auth-errors';
 
 const id = z.uuid();
 const number = (v: FormDataEntryValue | null) => Number(v);
@@ -28,9 +29,22 @@ async function run(path: string, fn: () => Promise<void>) {
 export async function login(f: FormData) {
   if (!configured()) redirect('/');
   const db = await supabase();
-  const { error } = await db.auth.signInWithPassword({ email: text(f, 'email'), password: text(f, 'password') });
-  if (error) redirect('/login?error=Inloggen%20niet%20gelukt.%20Controleer%20je%20gegevens.');
+  // Passwords are exact strings; leading/trailing spaces may be intentional.
+  const { error } = await db.auth.signInWithPassword({ email: text(f, 'email'), password: String(f.get('password') ?? '') });
+  if (error) redirect('/login?error=' + encodeURIComponent(loginError(error)));
   redirect('/');
+}
+export async function requestPasswordReset(f: FormData) {
+  if (!configured()) redirect('/login');
+  const email = z.email().safeParse(text(f, 'email'));
+  if (!email.success) redirect('/wachtwoord-vergeten?error=Vul%20een%20geldig%20e-mailadres%20in.');
+  const site = process.env.NEXT_PUBLIC_SITE_URL;
+  if (!site) redirect('/wachtwoord-vergeten?error=De%20herstellink%20is%20nog%20niet%20ingesteld.%20Neem%20contact%20op%20met%20de%20beheerder.');
+  const db = await supabase();
+  const { error } = await db.auth.resetPasswordForEmail(email.data, { redirectTo: `${site}/auth/confirm` });
+  if (error) redirect('/wachtwoord-vergeten?error=' + encodeURIComponent(error.status === 429 ? 'Er zijn te veel aanvragen gedaan. Wacht even voordat je opnieuw probeert.' : 'De herstelmail kon niet worden aangevraagd. Probeer het straks opnieuw of controleer de e-mailinstellingen in Supabase.'));
+  // Same response for existing and unknown email addresses.
+  redirect('/wachtwoord-vergeten?success=' + encodeURIComponent('Als er een account bij dit e-mailadres hoort, ontvang je een herstelmail. Controleer ook je spammap.'));
 }
 export async function logout() { if (configured()) { const db = await supabase(); await db.auth.signOut(); } redirect('/login'); }
 export async function setPassword(f: FormData) {
