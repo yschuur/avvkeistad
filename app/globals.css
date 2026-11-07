@@ -273,3 +273,20 @@ input[type=color] { width: 44px; height: 36px; flex-shrink: 0; padding: var(--sp
   .login-page { padding: var(--space-6) var(--space-5); }
 }
 @media (prefers-reduced-motion: reduce) { .loading-spinner { animation: none; } }
+
+/* Match synchronization and recipient-only notifications. */
+.sync-meta { margin-bottom: var(--space-4); color: var(--text-muted); font-size: 12px; }
+.match-detail { margin-top: var(--space-2); white-space: normal; font-size: 12px; }
+.match-detail summary { cursor: pointer; color: var(--text-muted); min-height: 28px; }
+.match-detail dl { margin: var(--space-2) 0; }
+.match-detail dt { color: var(--text-muted); margin-top: var(--space-2); font-size: 11px; }
+.match-detail dd { white-space: normal; }
+.match-detail a, .notification-row a { text-decoration: underline; text-underline-offset: 3px; color: var(--accent-text); }
+.match-duty-form { min-width: 180px; max-width: 260px; margin-top: var(--space-3); }
+.source-description, .notification-body { white-space: pre-line; overflow-wrap: anywhere; color: var(--text-muted); font-size: 12px; margin: var(--space-3) 0; }
+.notification-list { border-top: 1px solid var(--border); }
+.notification-row { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: var(--space-5); padding: var(--space-5) 0; border-bottom: 1px solid var(--border); }
+.notification-row h2 { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.notification-row:not(.unread) h2 { font-weight: 500; }
+.notification-meta { display: flex; flex-direction: column; gap: var(--space-3); align-items: flex-end; font-size: 11px; color: var(--text-muted); }
+@media (max-width: 768px) { .notification-row { grid-template-columns: 1fr; gap: var(--space-3); } .notification-meta { align-items: flex-start; } .match-detail summary { min-height: 44px; } }

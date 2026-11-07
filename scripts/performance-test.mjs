@@ -16,6 +16,8 @@ const season='20000000-0000-4000-8000-000000000001';
 const teamId='30000000-0000-4000-8000-000000000001';
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
+const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
+const testNotification={id:'80000000-0000-4000-8000-000000000001',member_id:memberA,match_id:testMatch.id,title:'Testwedstrijd gewijzigd',body:'Nieuwe planning in de lokale testomgeving.',created_at:new Date().toISOString(),read_at:null};
 const records=[];
 const authWrites=[];
 const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
@@ -37,6 +39,7 @@ const mock=createServer(async(req,res)=>{
  res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,OPTIONS');
  if(req.method==='OPTIONS') return res.end();
  if(body) authWrites.push({path:url.pathname,body:JSON.parse(body)});
+ if(url.pathname==='/rest/v1/rpc/mark_notification_read') {testNotification.read_at=new Date().toISOString();return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
   const input=JSON.parse(body);brand={primary_color:input.p_primary,secondary_color:input.p_secondary};return res.end('null');
@@ -58,6 +61,12 @@ const mock=createServer(async(req,res)=>{
   return res.end(JSON.stringify(profile(id)));
  }
  let result=[];
+ if(url.pathname==='/rest/v1/notifications') {
+  const own=url.searchParams.get('member_id')==='eq.'+memberA;
+  result=own && (url.searchParams.get('read_at')!=='is.null'||!testNotification.read_at)?[testNotification]:[];
+  res.setHeader('Content-Range',result.length?'0-0/1':'*/0');
+ }
+ if(url.pathname==='/rest/v1/matches') result=[testMatch];
  if(url.pathname==='/rest/v1/club_branding') result=[brand];
  if(url.pathname==='/rest/v1/teams') result=[{id:teamId,name:'Testteam',age_class:'senior'}];
  if(url.pathname==='/rest/v1/memberships') {
@@ -95,7 +104,7 @@ try {
  const dashboard=await load('/',cookieA);
  const dashboardRequests=[...records];
  assert.equal(dashboardRequests.filter(r=>r.path.startsWith('/auth/')).length,0,'Warme paginawissel mag geen Auth HTTP-request nodig hebben met asymmetrische sleutels');
- assert.equal(dashboardRequests.filter(r=>r.path.startsWith('/rest/')).length,8);
+ assert.equal(dashboardRequests.filter(r=>r.path.startsWith('/rest/')).length,9);
  assert.ok(!dashboardRequests.some(r=>r.path.endsWith('/matches') || r.path.endsWith('/function_definitions')));
  const p=dashboardRequests.find(r=>r.path.endsWith('/profiles')),s=dashboardRequests.find(r=>r.path.endsWith('/seasons'));
  assert.ok(Math.abs(p.time-s.time)<100,'Profiel en seizoen moeten parallel laden');
@@ -103,7 +112,7 @@ try {
  assert.equal(dashboardRequests.find(r=>r.path.endsWith('/enrollments')).query.get('duties.season_id'),'eq.'+season);
  records.length=0;
  const matches=await load('/wedstrijden',cookieA);
- assert.equal(records.filter(r=>r.path.startsWith('/rest/')).length,5);
+ assert.equal(records.filter(r=>r.path.startsWith('/rest/')).length,7);
  assert.ok(!records.some(r=>r.path.endsWith('/duties') || r.path.endsWith('/enrollments')));
  assert.match((await load('/',cookieB)).html,/Bram/);
  assert.doesNotMatch((await load('/',cookieB)).html,/Anna/);
@@ -141,6 +150,13 @@ try {
  await page.getByRole('link',{name:'Wedstrijden',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
  release();await page.waitForURL('**/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
+ await page.goto(base+'/meldingen');
+ await page.getByRole('heading',{name:'Meldingen',exact:true}).waitFor();
+ await page.getByRole('heading',{name:'Testwedstrijd gewijzigd'}).waitFor();
+ await page.getByRole('button',{name:'Markeren als gelezen'}).click();
+ await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.ok(testNotification.read_at);
+ const forbiddenWorker=await fetch(base+'/api/nevobo/notifications');assert.equal(forbiddenWorker.status,401);
  // Exercise the original admin flow, rejected credentials and both email-link formats.
  const adminPage=await browser.newPage();adminPage.setDefaultTimeout(10000);await adminPage.goto(base+'/login');
  await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
@@ -211,7 +227,7 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/team','/wedstrijden','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/beheer','/team','/wedstrijden','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
      if(screenshots && ['/','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':'huisstijl'}-${width}.png`,fullPage:true});
@@ -228,7 +244,7 @@ try {
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
  console.log('Designcontrole geslaagd: huisstijlpreview, opslaan/herladen/reset, member-toegangsbeperking, bevestigingsdialoog, mobiele navigatie en overflow op 390/768/1440 px. Alleen testfixtures.');
  console.log('Auth-integratie geslaagd: admin inloggen/beheer, onjuiste credentials, herstelmail zonder accountonthulling, standaard- en token-hash-herstellinks, wachtwoord wijzigen en opnieuw inloggen met exacte wachtwoordtekens. Geen echte e-mails verstuurd.');
- console.log(`Performance-integratie geslaagd: dashboard 8 API-requests (${dashboard.ms}ms), wedstrijden 5 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);
+ console.log(`Performance-integratie geslaagd: dashboard 9 API-requests (${dashboard.ms}ms), wedstrijden 7 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);
 } finally {
  if(browser) await browser.close();app.kill('SIGTERM');mock.closeAllConnections();await new Promise(resolve=>mock.close(resolve));
 }

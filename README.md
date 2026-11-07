@@ -125,3 +125,11 @@ Admin en beheerder vinden de editor onder **Beheer → Instellingen → Huisstij
 Alleen kleuren zijn publiek leesbaar; de identiteit van de editor is niet publiek uitleesbaar. Alleen admin/manager kan via de opslagfunctie schrijven. De app behoudt standaardkleuren als de migratie nog ontbreekt of de instelling niet kan worden opgehaald. De editor meldt dit en schakelt Opslaan uit. Na toepassen van de migratie de pagina herladen. Publieke kleurgegevens hebben een cache van 60 seconden; opslaan wist de cache direct.
 
 `npm test` test onder meer de nieuwe migratie met daadwerkelijke PostgreSQL-rechten en kleurcontrast voor een RGB-steekproef. `npm run test:browser` en `npm run test:performance` gebruiken dezelfde lokale integratiesuite, inclusief huisstijlpreview, bewaren/herladen/reset, mobiele navigatie en bestaande auth-/herstelflows. `SCREENSHOT_DIR` kan een uitvoermap voor screenshots van uitsluitend deze testomgeving instellen.
+
+## Nevobo-koppeling — werk in uitvoering
+
+De beoogde bron is `https://api.nevobo.nl/export/vereniging/CKL7S2R/programma.rss`. De actuele cloudnetwerkpolicy weigert deze bestemming. De daadwerkelijke RSS-inhoud/structuur is daardoor nog niet geverifieerd; er is nog geen bronadapter of actieve vieruurlijkse import. De bestaande live app is hiervoor nog niet bijgewerkt.
+
+Lokaal zijn de transacties voor genormaliseerde wedstrijdsnapshots, wijzigingshistorie, gekoppelde fluitdiensten en eigen appmeldingen uitgewerkt in migratie 003. Een afzonderlijke e-mailwachtrij heeft claims, retry/backoff en vaste idempotentiesleutels. De voorbereide mailtransportlaag gebruikt Resend via HTTPS; daarvoor zijn in Vercel `RESEND_API_KEY` en een geverifieerd `NOTIFICATION_FROM_EMAIL` nodig. `CRON_SECRET` beveiligt geplande HTTP-verzoeken. Geen geheime waarden in broncode of chat zetten. Er zijn geen echte e-mails verstuurd.
+
+De uiteindelijke vieruurstaak wordt via Supabase Cron ingericht, omdat Vercel Hobby geen vieruurlijkse cron ondersteunt. Het importendpoint en de concrete cronconfiguratie worden pas afgerond na verificatie van de bronadapter. Pas migratie 003 en cron nog niet op productie toe zolang deze aansluiting niet is afgerond. De SQL-/mailtests gebruiken uitsluitend lokale fixtures; die bewijzen nog niet dat de echte feed correct wordt geïnterpreteerd of dat echte mail wordt afgeleverd.

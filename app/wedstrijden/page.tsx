@@ -1,7 +1,35 @@
+import Link from 'next/link';
 import { getData } from '@/lib/data';
 import { Shell } from '@/components/shell';
-import { Heading, date, time } from '@/components/ui';
-export default async function MatchesPage() {
-  const data = await getData('matches');
-  return <Shell data={data}><Heading title="Wedstrijden"/><div className="notice">De automatische Nevobo-koppeling is nog niet ingericht. Dit overzicht bevat alleen geïmporteerde wedstrijden. <a href="https://www.volleybal.nl/competitie/vereniging/ckl7s2r#program" target="_blank" rel="noreferrer">Bekijk het actuele bondsprogramma ↗</a></div><section className="panel"><div className="table-wrap" role="region" aria-label="Wedstrijdprogramma" tabIndex={0}><table><thead><tr><th>Datum</th><th>Wedstrijd</th><th>Locatie</th><th>Niveau</th><th>Scheidsrechter</th></tr></thead><tbody>{data.matches.map(m=><tr key={m.id}><td>{date(m.starts_at)}<small>{time(m.starts_at)}</small></td><td><strong>{m.home_team}</strong><small>tegen {m.away_team}</small></td><td>{m.location}</td><td>{m.level}</td><td><span className="badge">{m.club_referee?'Via de club':'Via de bond'}</span></td></tr>)}</tbody></table>{!data.matches.length && <p className="empty-state">Er zijn nog geen wedstrijden geïmporteerd.</p>}</div></section></Shell>;
+import { Heading, Notice, date, time } from '@/components/ui';
+import { SubmitButton } from '@/components/submit-button';
+import { createMatchDuty } from '@/app/actions';
+import { NEVOBO_PROGRAM_URL,canRegisterForMatch,statusLabels,type MatchStatus } from '@/lib/nevobo/types';
+function safeSource(value:string|null|undefined) {
+ if(!value) return null;
+ try {const u=new URL(value);return u.protocol==='https:' && ['nevobo.nl','www.nevobo.nl','api.nevobo.nl','volleybal.nl','www.volleybal.nl'].includes(u.hostname)?u.href:null;}catch{return null;}
+}
+export default async function MatchesPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}) {
+ const data=await getData('matches'),params=await searchParams,manager=data.profile.role!=='member',now=new Date();
+ const view=params.view==='history'?'history':params.view==='all'?'all':'upcoming';
+ const matches=data.matches.filter(m=>{
+  if(params.match && m.id!==params.match) return false;
+  const past=m.status==='played'||Boolean(m.starts_at && new Date(m.starts_at)<=now);
+  return view==='all'||(view==='history'?past:!past);
+ });
+ const sync=data.syncState;
+ const stale=sync?.last_success_at && now.getTime()-new Date(sync.last_success_at).getTime()>5*3600000;
+ return <Shell data={data}><Heading title="Wedstrijden"><a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>
+  <div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
+  {(stale || (manager && sync?.last_error_code)) && <p className="notice warning" role="alert">De wedstrijdgegevens zijn mogelijk verouderd. De laatste automatische synchronisatie moet worden gecontroleerd.</p>}
+  <div className="filter-bar"><div className="tabs"><Link href="/wedstrijden" className={view==='upcoming'?'selected':''}>Programma</Link><Link href="/wedstrijden?view=history" className={view==='history'?'selected':''}>Historie</Link>{params.match && <Link href="/wedstrijden">Selectie wissen</Link>}</div><span className="muted small">{matches.length} wedstrijden · Nederlandse tijd</span></div>
+  <div className="table-wrap" role="region" aria-label="Wedstrijdprogramma" tabIndex={0}><table><thead><tr><th>Datum / tijd</th><th>Wedstrijd</th><th>Locatie</th><th>Status</th><th>Scheidsrechter</th></tr></thead><tbody>{matches.map(m=>{
+   const source=safeSource(m.source_url),open=canRegisterForMatch(m,now),past=m.starts_at && new Date(m.starts_at)<=now;
+   const status=m.cancelled?'cancelled':m.status ?? 'scheduled';
+   const linked=m.referee_duties?.find(d=>d.kind==='referee' && !d.cancelled);
+   return <tr key={m.id}><td>{m.starts_at?<><span>{date(m.starts_at)}</span><small>{time(m.starts_at)}</small></>:<span>Nog geen datum</span>}</td><td><strong>{m.home_team}</strong><small>tegen {m.away_team}</small><details className="match-detail"><summary>Wedstrijddetails</summary><dl>{m.match_code && <><dt>Wedstrijdcode</dt><dd>{m.match_code}</dd></>}{m.level && <><dt>Niveau / competitie</dt><dd>{m.level}</dd></>}{m.address && <><dt>Adres</dt><dd>{m.address}</dd></>}{m.city && <><dt>Plaats</dt><dd>{m.city}</dd></>}{m.court && <><dt>Veld</dt><dd>{m.court}</dd></>}</dl>{m.source_description && <p className="source-description">{m.source_description}</p>}{source && <a href={source} target="_blank" rel="noreferrer">Bekijk bij Nevobo</a>}</details></td>
+   <td>{m.location || 'Niet vermeld'}{m.city && <small>{m.city}</small>}{m.court && <small>Veld {m.court}</small>}</td><td><span className="badge">{status==='scheduled' && past?'Afgelopen':statusLabels[status as MatchStatus] ?? 'Niet bevestigd'}</span></td>
+   <td>{!open?<span className="muted">Inschrijving gesloten</span>:linked?<Link href={`/diensten?match=${encodeURIComponent(m.id)}`}>Fluitdienst bekijken</Link>:manager?<details className="match-detail"><summary>Fluitdienst aanmaken</summary><form action={createMatchDuty} className="stack-form match-duty-form"><input name="match_id" type="hidden" value={m.id}/><label>Punten<input name="points" type="number" min={0.25} step="0.25" required/></label><label>Geplande duur (minuten)<input name="minutes" type="number" min={15} max={480} required/></label><label>Vereiste bevoegdheid (0–10)<input name="level" type="number" min={0} max={10} required/></label><SubmitButton className="button">Fluitdienst aanmaken</SubmitButton></form></details>:<span className="muted">Geen clubdienst gekoppeld</span>}</td></tr>;
+  })}</tbody></table>{!matches.length && <p className="empty-state">Geen wedstrijden in deze selectie.</p>}</div>
+ </Shell>;
 }

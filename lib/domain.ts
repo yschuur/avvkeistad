@@ -3,7 +3,7 @@ export type Duty = {
   id: string; title: string; kind: 'bar' | 'referee' | 'event' | 'lines';
   starts_at: string; ends_at: string; points: number; capacity: number;
   location: string; required_level: number; assigned_team_id: string | null;
-  cancelled: boolean;
+  cancelled: boolean; signup_closed?:boolean;credit_blocked?:boolean;match_id?:string|null;
 };
 export type Enrollment = { id: string; duty_id: string; member_id: string; created_at: string; offered: boolean; revoked: boolean };
 export type Profile = { id: string; first_name: string; last_name: string; email: string; role: Role; referee_level: number; nevobo_code: string | null };

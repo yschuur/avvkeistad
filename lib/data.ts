@@ -4,9 +4,10 @@ import { configured, supabase } from './supabase/server';
 import { progress, type Duty, type Profile, type Enrollment } from './domain';
 export type Membership = { member_id: string; team_id: string; captain: boolean; norm_override: number | null };
 export type Team = { id: string; name: string; age_class: string };
-export type Match = { id: string; home_team: string; away_team: string; starts_at: string; location: string; level: string; club_referee: boolean };
+export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number}[] };
+export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string };
-export type DataView = 'dashboard' | 'duties' | 'team' | 'management' | 'report' | 'matches' | 'settings';
+export type DataView = 'dashboard' | 'duties' | 'team' | 'management' | 'report' | 'matches' | 'settings' | 'notifications';
 // React cache is request-scoped: never share member data across users or requests.
 export const getData = cache(async (view: DataView = 'dashboard') => {
   if (!configured()) redirect('/login?error=' + encodeURIComponent('De applicatie is nog niet ingesteld. Neem contact op met de beheerder.'));
@@ -27,7 +28,7 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
   const season = seasonResult.data as Season | null;
   const seasonId = season?.id ?? '00000000-0000-0000-0000-000000000000';
   const teamView = ['team', 'management', 'report'].includes(view);
-  const needDuties = view !== 'matches' && view !== 'settings';
+  const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications';
   const needAssignments = ['dashboard', 'team', 'management', 'report'].includes(view);
   const empty = Promise.resolve({ data: [], error: null });
   let enrollmentQuery = db.from('enrollments').select('*, duties!inner(season_id)').eq('duties.season_id', seasonId);
@@ -45,14 +46,16 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
     membershipQuery,
     teamView ? db.from('profiles').select('*').order('last_name') : Promise.resolve({ data: [profile], error: null }),
     needAssignments ? assignmentQuery : empty,
-    view === 'matches' ? db.from('matches').select('*').eq('season_id', seasonId).order('starts_at') : empty,
+    view === 'matches' ? db.from('matches').select('*, referee_duties:duties(id,kind,cancelled,points)').eq('season_id', seasonId).order('starts_at',{nullsFirst:false}) : empty,
     needDuties && view !== 'report' ? db.rpc('duty_availability') : empty,
     view === 'management' ? db.from('function_definitions').select('*').eq('season_id', seasonId) : empty,
+    db.from('notifications').select('id',{count:'exact',head:true}).eq('member_id',memberId).is('read_at',null),
+    view === 'matches' ? db.from('nevobo_sync_state').select('last_started_at,last_success_at,last_error_code,feed_published_at,imported_count,updated_count') : empty,
   ]);
-  if (results.some(r => r.error)) throw new Error('Gegevens konden niet worden opgehaald. Controleer de migratie en toegangsrechten.');
+  if (results.slice(0,9).some(r => r.error)) throw new Error('Gegevens konden niet worden opgehaald. Controleer de migratie en toegangsrechten.');
   return { profile, season,
     duties: results[0].data as Duty[], enrollments: results[1].data as Enrollment[], teams: results[2].data as Team[],
-    memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[] }[], functions: results[8].data as {title:string;points:number}[] };
+    memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[] }[], functions: results[8].data as {title:string;points:number}[], unreadNotifications:results[9].error?null:(results[9] as {count?:number|null}).count ?? null, syncState:results[10].error?null:(results[10].data?.[0] as SyncState|undefined) ?? null };
 });
 
 type Season = { id: string; name: string; default_norm: number; youth_norm: number | null; senior_norm: number | null; starts_on: string; ends_on: string };
@@ -66,7 +69,7 @@ export function memberProgress(data: AppData, memberId: string) {
   let earned = data.assignments.filter(a => a.member_id === memberId).reduce((n, a) => n + Number(a.points), 0), planned = 0;
   for (const e of owned) {
     const d = data.duties.find(d => d.id === e.duty_id && !d.cancelled);
-    if (!d) continue;
+    if (!d || d.credit_blocked) continue;
     if (new Date(d.ends_at) <= new Date()) earned += Number(d.points); else planned += Number(d.points);
   }
   return progress(Number(norm), earned, planned);

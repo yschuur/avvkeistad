@@ -10,7 +10,7 @@ export default async function Home({searchParams}:{searchParams:Promise<Record<s
   const membership=data.memberships.find(m=>m.member_id===data.profile.id);
   const team=data.teams.find(t=>t.id===membership?.team_id);
   const own=data.duties.filter(d=>!d.cancelled && new Date(d.ends_at)>new Date() && data.enrollments.some(e=>e.duty_id===d.id && e.member_id===data.profile.id && !e.revoked));
-  const available=data.duties.filter(d=>!d.cancelled && new Date(d.starts_at)>new Date() && !own.includes(d)).slice(0,3);
+  const available=data.duties.filter(d=>!d.cancelled && !d.signup_closed && new Date(d.starts_at)>new Date() && !own.includes(d)).slice(0,3);
   const known=Boolean(data.season && membership);
   const metrics=[['Norm',p.norm],['Behaald',p.earned],['Ingepland',p.planned],['Nog in te plannen',p.toPlan],['Nog te behalen',p.toEarn]] as const;
   return <Shell data={data}><Heading title="Mijn overzicht"><Link href="/diensten" className="button">Diensten bekijken</Link></Heading><Notice params={params}/>

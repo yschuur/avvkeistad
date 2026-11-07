@@ -151,3 +151,15 @@ export async function saveBranding(f: FormData) {
     updateTag('club-branding');
   });
 }
+
+export async function markNotificationRead(f:FormData) {
+ await run('/meldingen',async()=>{const db=await supabase();const {error}=await db.rpc('mark_notification_read',{p_notification:id.parse(f.get('notification_id'))});if(error) throw new Error('De melding kon niet worden bijgewerkt.');});
+}
+export async function createMatchDuty(f:FormData) {
+ await run('/wedstrijden',async()=>{
+  const {db}=await manager();const {error}=await db.rpc('create_match_referee_duty',{
+   p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
+   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),p_level:z.number().int().min(0).max(10).parse(number(f.get('level'))),
+  });if(error) throw new Error(error.message);
+ });
+}

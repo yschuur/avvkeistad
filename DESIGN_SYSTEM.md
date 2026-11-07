@@ -78,3 +78,9 @@ Wel: nieuwe UI met bestaande tokens, gedeelde componenten en bijgewerkte documen
 ## Verificatie
 
 `npm run build` controleert productiebuild en TypeScript. `npm test` omvat de bestaande businessregels plus merkcontrast/validatie en de echte huisstijlmigratie met RLS/autorisatie. `npm run test:browser` gebruikt uitsluitend een lokale testbackend en controleert navigatie, authenticatie/herstel, formulieren, huisstijlpreview/opslag/herladen, mobiele menu-interactie en responsive overflow. Testfixtures komen niet in de productie-app. Productieopslag vereist dat migratie `002_club_branding.sql` is toegepast; zonder migratie blijft de app met standaardkleuren bruikbaar en is opslaan in Huisstijl niet beschikbaar.
+
+## Wedstrijdwijzigingen en meldingen
+
+Het wedstrijdprogramma gebruikt de bestaande compacte tabelstijl met datum/tijd, teams, locatie, status en gekoppelde fluitdienst. Details zijn ingeklapt en bronbeschrijvingen worden uitsluitend als tekst weergegeven, nooit als HTML. Een verstreken begintijd heet ‘Afgelopen’; ‘Gespeeld’ vereist een bevestigde bronstatus. Een verdwenen wedstrijd heet ‘Status niet bevestigd’, niet automatisch ‘Afgelast’. Onbekende datums worden niet verzonnen. Inschrijfopties verdwijnen zodra de wedstrijd gesloten is; de database controleert dit eveneens bij inschrijven.
+
+Meldingen staan in een compacte lijst met titel, inhoud, tijdstip en een bestaande actie ‘Markeren als gelezen’. Een ongelezen aantal in de navigatie betreft uitsluitend de ingelogde gebruiker. Status wordt met tekst aangegeven. Deze schermen zijn in voorbereiding voor de Nevobo-import; de echte RSS-adapter en vieruurlijkse activering moeten nog worden gevalideerd voordat de koppeling live kan.

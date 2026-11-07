@@ -1,0 +1,71 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import type { ImportedMatch } from '../lib/nevobo/types';
+
+test('Nevobo database: import, idempotentie, wijziging, annulering, inschrijfstop en meldingen',async()=>{
+ const db=new PGlite();
+ const admin='10000000-0000-4000-8000-000000000001',ref='10000000-0000-4000-8000-000000000002',other='10000000-0000-4000-8000-000000000003';
+ const season='20000000-0000-4000-8000-000000000001',team='30000000-0000-4000-8000-000000000001';
+ try {
+  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+  await db.exec(await readFile(new URL('../supabase/migrations/001_initial.sql',import.meta.url),'utf8'));
+  for(const id of [admin,ref,other]) await db.query('insert into auth.users(id,email) values($1,$2)',[id,id+'@example.test']);
+  await db.query("update profiles set role='admin' where id=$1",[admin]);
+  await db.query("insert into seasons(id,name,starts_on,ends_on,default_norm,active) values($1,'Testseizoen',current_date-30,current_date+365,20,true)",[season]);
+  await db.query("insert into teams(id,season_id,name,age_class) values($1,$2,'Testteam','senior')",[team,season]);
+  for(const id of [ref,other]) await db.query('insert into memberships(member_id,season_id,team_id) values($1,$2,$3)',[id,season,team]);
+  await db.exec(await readFile(new URL('../supabase/migrations/003_nevobo_matches.sql',import.meta.url),'utf8'));
+  const as=async(id:string|null,service=false)=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id ?? '']);await db.exec('set role '+(service?'service_role':id?'authenticated':'anon'));};
+  const first=async<T>(sql:string,args:unknown[]=[])=>{const result=await db.query<T>(sql,args);assert.ok(result.rows[0]);return result.rows[0];};
+  const fixture:ImportedMatch={external_id:'test-nevobo-stable-id',home_team:'Test thuis',away_team:'Test uit',starts_at:new Date(Date.now()+7*86400000).toISOString(),location:'Testhal',level:'',address:null,city:null,court:null,match_code:'TEST',source_url:null,source_description:'Testfixture, geen echte feed.',source_details:{},is_home:true,status:'scheduled'};
+  const sync=async(items:ImportedMatch[],complete=false)=>{
+   await as(null,true);
+   const lease=await first<{id:string}>('select acquire_nevobo_sync() as id');
+   return (await first<{result:{inserted:number;updated:number}}>('select apply_nevobo_snapshot($1,$2,$3::jsonb,null,$4) as result',[lease.id,season,JSON.stringify(items),complete])).result;
+  };
+  await as(other);await assert.rejects(db.query('select acquire_nevobo_sync()'),/permission denied/);
+  await assert.rejects(db.query('select claim_notification_emails(10)'),/permission denied/);
+  assert.deepEqual(await sync([fixture]),{inserted:1,updated:0,skipped:0});
+  await db.exec('reset role');const match=await first<{id:string}>('select id from matches where external_id=$1',[fixture.external_id]);
+  await as(admin);const duty=await first<{id:string}>('select create_match_referee_duty($1,2,90,0) as id',[match.id]);
+  await as(ref);await db.query('select enroll($1)',[duty.id]);
+  assert.deepEqual(await sync([fixture]),{inserted:0,updated:0,skipped:0});
+  await db.exec('reset role');assert.equal((await db.query('select id from notifications')).rows.length,0);
+  const moved={...fixture,starts_at:new Date(new Date(fixture.starts_at!).getTime()+3600000).toISOString(),location:'Nieuwe testhal'};
+  await sync([moved]);await db.exec('reset role');
+  const changedDuty=await first<{starts_at:Date;points:string;cancelled:boolean}>('select starts_at,points,cancelled from duties where id=$1',[duty.id]);
+  assert.equal(new Date(changedDuty.starts_at).getTime(),new Date(moved.starts_at).getTime());assert.equal(changedDuty.points,'2.00');assert.equal(changedDuty.cancelled,false);
+  const notification=await first<{id:string;member_id:string;title:string;body:string}>('select * from notifications');
+  assert.equal(notification.member_id,ref);assert.equal(notification.title,'Wedstrijd gewijzigd');assert.match(notification.body,/Nieuwe testhal/);
+  await as(other);assert.equal((await db.query('select id from notifications')).rows.length,0);
+  await assert.rejects(db.query('select mark_notification_read($1)',[notification.id]),/niet gevonden/);
+  await as(ref);await db.query('select mark_notification_read($1)',[notification.id]);
+  assert.ok((await first<{read_at:unknown}>('select read_at from notifications where id=$1',[notification.id])).read_at);
+  await as(null,true);
+  const claimed=(await db.query<{outbox_id:string;claim:string;recipient:string}>('select * from claim_notification_emails(10)')).rows;
+  assert.equal(claimed.length,1);assert.equal(claimed[0].recipient,ref+'@example.test');
+  assert.equal((await db.query('select * from claim_notification_emails(10)')).rows.length,0,'Een tweede worker claimt niet dezelfde mail');
+  await db.query('select finish_notification_email($1,$2,true,$3,null)',[claimed[0].outbox_id,claimed[0].claim,'test-provider-id']);
+  await sync([moved]);await db.exec('reset role');assert.equal((await db.query('select id from notifications')).rows.length,1);
+  const cancelled={...moved,status:'cancelled' as const};await sync([cancelled]);await db.exec('reset role');
+  assert.equal((await first<{cancelled:boolean}>('select cancelled from duties where id=$1',[duty.id])).cancelled,true);
+  assert.equal((await db.query('select id from enrollments where duty_id=$1 and not revoked',[duty.id])).rows.length,1,'Historie en toewijzing blijven behouden');
+  await as(other);await assert.rejects(db.query('select enroll($1)',[duty.id]),/niet meer beschikbaar/);
+  await sync([cancelled]);await db.exec('reset role');assert.equal((await db.query('select id from notifications')).rows.length,2,'Geen dubbele afgelastingsmelding');
+  await sync([moved]);await db.exec('reset role');assert.equal((await first<{cancelled:boolean}>('select cancelled from duties where id=$1',[duty.id])).cancelled,false,'Bronannulering kan worden hersteld');
+  await db.query('update duties set capacity=2 where id=$1',[duty.id]);
+  const postponed={...moved,status:'postponed' as const,starts_at:null};await sync([postponed]);await db.exec('reset role');
+  const blocked=await first<{signup_closed:boolean;credit_blocked:boolean}>('select signup_closed,credit_blocked from duties where id=$1',[duty.id]);assert.equal(blocked.signup_closed,true);assert.equal(blocked.credit_blocked,true);
+  await as(other);await assert.rejects(db.query('select enroll($1)',[duty.id]),/wedstrijd is niet beschikbaar/);
+  await sync([moved]);await sync([],true);await db.exec('reset role');
+  assert.equal((await first<{status:string}>('select status from matches where id=$1',[match.id])).status,'scheduled','Een lege feed is geen bevestigde afgelasting');
+  await as(admin);await db.query('select cancel_duty($1)',[duty.id]);await sync([{...moved,location:'Nog een testlocatie'}]);await db.exec('reset role');
+  assert.equal((await first<{cancelled:boolean}>('select cancelled from duties where id=$1',[duty.id])).cancelled,true,'Handmatig geannuleerde dienst wordt niet heropend');
+  // Even without another scheduled sync, a started match cannot be joined.
+  await db.query('update duties set cancelled=false,signup_closed=false where id=$1',[duty.id]);
+  await db.query("update matches set starts_at=now()-interval '1 minute' where id=$1",[match.id]);
+  await as(other);await assert.rejects(db.query('select enroll($1)',[duty.id]),/wedstrijd is niet beschikbaar/);
+ } finally {await db.close();}
+});
