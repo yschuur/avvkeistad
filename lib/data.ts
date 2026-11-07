@@ -1,34 +1,60 @@
 import { redirect } from 'next/navigation';
+import { cache } from 'react';
 import { configured, supabase } from './supabase/server';
 import { progress, type Duty, type Profile, type Enrollment } from './domain';
 export type Membership = { member_id: string; team_id: string; captain: boolean; norm_override: number | null };
 export type Team = { id: string; name: string; age_class: string };
 export type Match = { id: string; home_team: string; away_team: string; starts_at: string; location: string; level: string; club_referee: boolean };
 export type Assignment = { id: string; member_id: string; points: number; title: string };
-export async function getData() {
+export type DataView = 'dashboard' | 'duties' | 'team' | 'management' | 'report' | 'matches';
+// React cache is request-scoped: never share member data across users or requests.
+export const getData = cache(async (view: DataView = 'dashboard') => {
   if (!configured()) return demo();
   const db = await supabase();
-  const { data: { user } } = await db.auth.getUser();
-  if (!user) redirect('/login');
-  const { data: profile, error: profileError } = await db.from('profiles').select('*').eq('id', user.id).single();
-  if (profileError || !profile) throw new Error('Je account heeft nog geen ledenprofiel. Neem contact op met de beheerder.');
-  const { data: season, error } = await db.from('seasons').select('*').eq('active', true).maybeSingle();
-  if (error) throw new Error('Het actieve seizoen kon niet worden geladen. Controleer de database-inrichting.');
+  // Verifies signature and expiry locally with cached public keys on asymmetric
+  // projects. Supabase falls back to getUser for legacy symmetric signing keys.
+  const { data: identity, error: identityError } = await db.auth.getClaims();
+  if (identityError || !identity?.claims.sub) redirect('/login');
+  const memberId = identity.claims.sub;
+  const [profileResult, seasonResult] = await Promise.all([
+    db.from('profiles').select('*').eq('id', memberId).single(),
+    db.from('seasons').select('*').eq('active', true).maybeSingle(),
+  ]);
+  const profile = profileResult.data as Profile | null;
+  if (profileResult.error || !profile) throw new Error('Je account heeft nog geen ledenprofiel. Neem contact op met de beheerder.');
+  if (seasonResult.error) throw new Error('Het actieve seizoen kon niet worden geladen. Controleer de database-inrichting.');
+  if ((view === 'management' || view === 'report') && profile.role === 'member') redirect('/');
+  const season = seasonResult.data as Season | null;
   const seasonId = season?.id ?? '00000000-0000-0000-0000-000000000000';
+  const teamView = ['team', 'management', 'report'].includes(view);
+  const needDuties = view !== 'matches';
+  const needAssignments = ['dashboard', 'team', 'management', 'report'].includes(view);
+  const empty = Promise.resolve({ data: [], error: null });
+  let enrollmentQuery = db.from('enrollments').select('*, duties!inner(season_id)').eq('duties.season_id', seasonId);
+  let membershipQuery = db.from('memberships').select('*').eq('season_id', seasonId);
+  if (!teamView) {
+    enrollmentQuery = enrollmentQuery.eq('member_id', memberId);
+    membershipQuery = membershipQuery.eq('member_id', memberId);
+  }
+  let assignmentQuery = db.from('function_assignments').select('*').eq('season_id', seasonId);
+  if (!teamView) assignmentQuery = assignmentQuery.eq('member_id', memberId);
   const results = await Promise.all([
-    db.from('duties').select('*').eq('season_id', seasonId).order('starts_at'),
-    db.from('enrollments').select('*'), db.from('teams').select('*').eq('season_id', seasonId),
-    db.from('memberships').select('*').eq('season_id', seasonId), db.from('profiles').select('*').order('last_name'),
-    db.from('function_assignments').select('*').eq('season_id', seasonId),
-    db.from('matches').select('*').eq('season_id', seasonId).order('starts_at'),
-    db.rpc('duty_availability'),
-    db.from('function_definitions').select('*').eq('season_id',seasonId),
+    needDuties ? db.from('duties').select('*').eq('season_id', seasonId).order('starts_at') : empty,
+    needDuties ? enrollmentQuery : empty,
+    db.from('teams').select('*').eq('season_id', seasonId),
+    membershipQuery,
+    teamView ? db.from('profiles').select('*').order('last_name') : Promise.resolve({ data: [profile], error: null }),
+    needAssignments ? assignmentQuery : empty,
+    view === 'matches' ? db.from('matches').select('*').eq('season_id', seasonId).order('starts_at') : empty,
+    needDuties && view !== 'report' ? db.rpc('duty_availability') : empty,
+    view === 'management' ? db.from('function_definitions').select('*').eq('season_id', seasonId) : empty,
   ]);
   if (results.some(r => r.error)) throw new Error('Gegevens konden niet worden opgehaald. Controleer de migratie en toegangsrechten.');
-  return { demo: false, profile: profile as Profile, season: season as Season | null,
+  return { demo: false, profile, season,
     duties: results[0].data as Duty[], enrollments: results[1].data as Enrollment[], teams: results[2].data as Team[],
     memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[] }[], functions: results[8].data as {title:string;points:number}[] };
-}
+});
+
 type Season = { id: string; name: string; default_norm: number; youth_norm: number | null; senior_norm: number | null; starts_on: string; ends_on: string };
 export type AppData = Awaited<ReturnType<typeof getData>>;
 export function memberProgress(data: AppData, memberId: string) {

@@ -2,7 +2,7 @@ import { NextRequest } from 'next/server';
 import { getData, memberProgress } from '@/lib/data';
 function cell(v: string|number) { const s=String(v); return '"'+(/^[=+\-@\t\r]/.test(s)?"'"+s:s).replaceAll('"','""')+'"'; }
 export async function GET(req:NextRequest) {
- const data=await getData();
+ const data=await getData('report');
  if(data.demo || data.profile.role==='member') return new Response('Geen toegang tot deze export.',{status:403});
  const team=req.nextUrl.searchParams.get('team');const deficit=req.nextUrl.searchParams.get('deficit')==='1';
  const rows:(string|number)[][]=[['Lid','Team','Norm','Behaald','Ingepland','Nog te behalen']];

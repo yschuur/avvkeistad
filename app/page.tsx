@@ -1,3 +1,4 @@
+import { SubmitButton } from '@/components/submit-button';
 import Link from 'next/link';
 import { ArrowUpRight, CalendarDays, Check, Flag, HeartHandshake, ArrowRight, Trophy } from 'lucide-react';
 import { getData, memberProgress } from '@/lib/data';
@@ -11,7 +12,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Rec
   const own = data.duties.filter(d=>!d.cancelled && new Date(d.ends_at)>new Date() && data.enrollments.some(e=>e.duty_id===d.id && e.member_id===data.profile.id && !e.revoked));
   const available = data.duties.filter(d=>!d.cancelled && new Date(d.starts_at)>new Date() && !own.includes(d)).slice(0,3);
   const team = data.teams.find(t=>t.id===data.memberships.find(m=>m.member_id===data.profile.id)?.team_id);
-  return <Shell data={data}><Notice params={params}/>{params.password && <section className="panel"><h2>Maak je account compleet</h2><form action={setPassword} className="inline-form"><label>Nieuw wachtwoord (minimaal 12 tekens)<input name="password" type="password" minLength={12} maxLength={128} required autoComplete="new-password"/></label><button className="button">Wachtwoord instellen</button></form></section>}
+  return <Shell data={data}><Notice params={params}/>{params.password && <section className="panel"><h2>Maak je account compleet</h2><form action={setPassword} className="inline-form"><label>Nieuw wachtwoord (minimaal 12 tekens)<input name="password" type="password" minLength={12} maxLength={128} required autoComplete="new-password"/></label><SubmitButton className="button">Wachtwoord instellen</SubmitButton></form></section>}
     <Heading eyebrow="JOUW INZET TELT" title={`Hoi ${data.profile.first_name}, fijn dat je er bent.`} description="Een sterke club maken we samen. Hier zie je jouw bijdrage."><span className="season-pill"><CalendarDays size={16}/>{data.season?.name ?? 'Geen actief seizoen'}</span></Heading>
     <section className="hero"><div className="hero-copy"><span className="hero-kicker"><span className="status-dot"/> SAMEN VOOR KEISTAD</span><h2>Op het veld een team.<br/>Daarbuiten ook.</h2><p>Een uurtje achter de bar. Een wedstrijd fluiten.<br/>Met jouw hulp kan de hele club blijven spelen.</p><Link href="/diensten" className="button white-button">Vind jouw volgende dienst <ArrowUpRight size={17}/></Link></div><div className="hero-art" aria-hidden="true"><div className="court-lines"/><div className="volleyball-art"><div/><div/><div/></div><span className="art-caption">IEDEREEN DRAAGT BIJ.</span><span className="art-number">01 / TEAM KEISTAD</span></div></section>
     <div className="section-heading"><h2>Jouw seizoen in punten</h2><span className="muted small">{team?.name ?? 'Nog geen team'} · Norm: {p.norm} punten</span></div>

@@ -93,3 +93,13 @@ Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. M
 - Dienstannulering is beschikbaar; tijd wijzigen en gehele reeksen aanpassen met meldingen volgen.
 
 Er is niets naar Vercel gedeployd en er zijn nog geen echte leden uitgenodigd.
+
+## Responsiviteit en performance
+
+Elke pagina laadt alleen de datasets die hij gebruikt; persoonlijke overzichten filteren expliciet op lid en seizoen. Profiel en seizoen laden parallel. React memoization is uitsluitend per serverrequest: er is geen gedeelde cache met ledengegevens. JWT-controle gebruikt Supabase `getClaims()`; bij asymmetrische signing keys wordt de handtekening met gecachte publieke sleutels gecontroleerd. Legacy symmetrische sleutels vallen automatisch terug op de Auth-server. Mutaties blijven hun databasecontroles en RLS gebruiken.
+
+Navigatie heeft directe laadfeedback en een streaming laadscherm. Serveractieknoppen tonen een spinner en zijn tijdens verwerking uitgeschakeld.
+
+`npm run test:performance` start na een productiebuild een tijdelijke Next-server op poort 3011 en een lokale mock van de Supabase HTTP API. Met tijdelijk gegenereerde ondertekende testtokens en 150 ms nagebootste API-latentie controleert deze test onder meer parallel laden, aantallen API-verzoeken, filtering, gebruikersisolatie, ondertekende JWT-verificatie, redirects en directe knop-/navigatiefeedback. Er worden geen echte accounts of credentials gebruikt. Dit is geen meting van Vercel of de live Supabase-regio. `PERFORMANCE_TEST_PORT` kan een andere vrije poort kiezen; Chromium wordt via `CHROMIUM_PATH` ingesteld.
+
+Vercel voert de serverfuncties volgens `vercel.json` uit in Dublin (`dub1`), nabij de door de gebruiker bevestigde Supabase-regio West EU (Ireland). Na een wijziging van de Supabase-regio moet deze instelling opnieuw worden beoordeeld. De instelling wordt bij de volgende Vercel-deployment toegepast; lokale tests meten geen productielatentie.
