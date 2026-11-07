@@ -1,10 +1,11 @@
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
+import { collectPages } from './pagination';
 import { configured, supabase } from './supabase/server';
 import { progress, type Duty, type Profile, type Enrollment } from './domain';
 export type Membership = { member_id: string; team_id: string; captain: boolean; norm_override: number | null };
 export type Team = { id: string; name: string; age_class: string };
-export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number}[] };
+export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;postal_code?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number}[] };
 export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string };
 export type DataView = 'dashboard' | 'duties' | 'team' | 'management' | 'report' | 'matches' | 'settings' | 'notifications';
@@ -46,7 +47,7 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
     membershipQuery,
     teamView ? db.from('profiles').select('*').order('last_name') : Promise.resolve({ data: [profile], error: null }),
     needAssignments ? assignmentQuery : empty,
-    view === 'matches' ? db.from('matches').select('*, referee_duties:duties(id,kind,cancelled,points)').eq('season_id', seasonId).order('starts_at',{nullsFirst:false}) : empty,
+    view === 'matches' ? collectPages<Match>(async(from,to)=>{const r=await db.from('matches').select('*, referee_duties:duties(id,kind,cancelled,points)',{count:'exact'}).eq('season_id',seasonId).order('starts_at',{nullsFirst:false}).order('id').range(from,to);return {data:r.data as Match[]|null,count:r.count,error:r.error};}) : empty,
     needDuties && view !== 'report' ? db.rpc('duty_availability') : empty,
     view === 'management' ? db.from('function_definitions').select('*').eq('season_id', seasonId) : empty,
     db.from('notifications').select('id',{count:'exact',head:true}).eq('member_id',memberId).is('read_at',null),

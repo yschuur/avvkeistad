@@ -16,7 +16,7 @@ export async function sendMatchEmail(job:EmailJob,config:MailConfig,fetcher:type
     const response=await fetcher('https://api.resend.com/emails',{
       method:'POST',headers:{Authorization:`Bearer ${config.key}`,'Content-Type':'application/json','Idempotency-Key':`nevobo-${job.notification_id}`},
       body:JSON.stringify({from:`AVV Keistad <${config.from}>`,to:[job.recipient],subject:`AVV Keistad · ${job.subject}`,
-        text:`${job.body}\n\nBekijk je meldingen: ${new URL('/meldingen',config.siteUrl)}\n\nDeze melding betreft je toewijzing als scheidsrechter op het moment van de wijziging.`}),
+        text:`${job.body}\n\nBekijk je meldingen: ${new URL('/meldingen',config.siteUrl)}\n\nDit bericht is afkomstig van het vrijwilligersportaal van AVV Keistad.`}),
       signal:AbortSignal.timeout(10000),
     });
     if(!response.ok) return {sent:false,code:`provider_http_${response.status}`};

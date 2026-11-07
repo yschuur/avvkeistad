@@ -7,7 +7,7 @@ export const importedMatch = z.object({
   home_team:z.string().min(1).max(200),away_team:z.string().min(1).max(200),
   starts_at:z.iso.datetime({offset:true}).nullable(),
   location:z.string().max(500),level:z.string().max(200),
-  address:z.string().max(500).nullable(),city:z.string().max(200).nullable(),court:z.string().max(100).nullable(),
+  address:z.string().max(500).nullable(),postal_code:z.string().max(20).nullable().optional(),city:z.string().max(200).nullable(),court:z.string().max(100).nullable(),
   match_code:z.string().max(200).nullable(),source_url:z.url().nullable(),
   source_description:z.string().max(20000),source_details:z.record(z.string(),z.unknown()),
   status:matchStatus,is_home:z.boolean().nullable(),

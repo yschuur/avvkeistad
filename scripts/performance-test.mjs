@@ -7,7 +7,7 @@ import { once } from 'node:events';
 import assert from 'node:assert/strict';
 import { createServerClient } from '@supabase/ssr';
 import { chromium } from 'playwright-core';
-import { mkdir } from 'node:fs/promises';
+import { mkdir,readFile } from 'node:fs/promises';
 const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'});
 const jwk={...publicKey.export({format:'jwk'}),kid:'local-performance-test',alg:'ES256',use:'sig'};
 const memberA='10000000-0000-4000-8000-000000000001', memberB='10000000-0000-4000-8000-000000000002', admin='10000000-0000-4000-8000-000000000003';
@@ -18,6 +18,11 @@ const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
 const testNotification={id:'80000000-0000-4000-8000-000000000001',member_id:memberA,match_id:testMatch.id,title:'Testwedstrijd gewijzigd',body:'Nieuwe planning in de lokale testomgeving.',created_at:new Date().toISOString(),read_at:null};
+const actualProgram=await readFile(new URL('../tests/fixtures/nevobo-program.rss',import.meta.url),'utf8');
+let programXml=actualProgram,programSignature=null,activeSync=false,refAssigned=false;
+const emailJobs=[],sentEmails=[],additionalNotifications=[];
+const cronToken='local-test-cron-token-not-a-real-secret-12345';
+let syncState={last_started_at:null,last_success_at:null,last_error_code:null,feed_published_at:null,imported_count:0,updated_count:0};
 const records=[];
 const authWrites=[];
 const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
@@ -39,6 +44,26 @@ const mock=createServer(async(req,res)=>{
  res.setHeader('Access-Control-Allow-Methods','GET,POST,PUT,OPTIONS');
  if(req.method==='OPTIONS') return res.end();
  if(body) authWrites.push({path:url.pathname,body:JSON.parse(body)});
+ if(url.pathname==='/fixture-nevobo.rss') {res.setHeader('Content-Type','application/rss+xml');return res.end(programXml);}
+ if(url.pathname==='/fixture-resend') {sentEmails.push({body:JSON.parse(body),key:req.headers['idempotency-key']});return res.end(JSON.stringify({id:'test-resend-message'}));}
+ if(url.pathname==='/rest/v1/rpc/acquire_nevobo_sync') {
+  if(activeSync) return res.end('null');activeSync=true;syncState.last_started_at=new Date().toISOString();
+  return res.end(JSON.stringify('90000000-0000-4000-8000-000000000001'));
+ }
+ if(url.pathname==='/rest/v1/rpc/fail_nevobo_sync') {activeSync=false;syncState.last_error_code=JSON.parse(body).p_code;return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/apply_nevobo_snapshot') {
+  const input=JSON.parse(body),signature=JSON.stringify(input.p_matches),inserted=programSignature===null?input.p_matches.length:0,updated=programSignature!==null && programSignature!==signature?input.p_matches.length:0;
+  Object.assign(testMatch,input.p_matches[0]);
+  if(updated && refAssigned) emailJobs.push({outbox_id:'91000000-0000-4000-8000-000000000001',claim:'92000000-0000-4000-8000-000000000001',recipient:'anna@example.test',subject:'Wedstrijd gewijzigd',body:'Lokale wijzigingstest: '+input.p_matches[0].starts_at,notification_id:testNotification.id});
+  programSignature=signature;activeSync=false;syncState={...syncState,last_success_at:new Date().toISOString(),last_error_code:null,imported_count:inserted,updated_count:updated};
+  return res.end(JSON.stringify({inserted,updated,skipped:0}));
+ }
+ if(url.pathname==='/rest/v1/rpc/claim_notification_emails') return res.end(JSON.stringify(emailJobs.splice(0,JSON.parse(body).p_limit)));
+ if(url.pathname==='/rest/v1/rpc/finish_notification_email') return res.end('null');
+ if(url.pathname==='/rest/v1/notifications' && req.method==='POST') {
+  const row={...JSON.parse(body),id:'83000000-0000-4000-8000-000000000001',match_id:null,read_at:null,created_at:new Date().toISOString()};
+  additionalNotifications.push(row);return res.end(JSON.stringify(row));
+ }
  if(url.pathname==='/rest/v1/rpc/mark_notification_read') {testNotification.read_at=new Date().toISOString();return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
@@ -62,10 +87,11 @@ const mock=createServer(async(req,res)=>{
  }
  let result=[];
  if(url.pathname==='/rest/v1/notifications') {
-  const own=url.searchParams.get('member_id')==='eq.'+memberA;
-  result=own && (url.searchParams.get('read_at')!=='is.null'||!testNotification.read_at)?[testNotification]:[];
-  res.setHeader('Content-Range',result.length?'0-0/1':'*/0');
+  const own=url.searchParams.get('member_id')?.replace('eq.','');
+  result=[testNotification,...additionalNotifications].filter(n=>n.member_id===own && (url.searchParams.get('read_at')!=='is.null'||!n.read_at));
+  res.setHeader('Content-Range',result.length?`0-${result.length-1}/${result.length}`:'*/0');
  }
+ if(url.pathname==='/rest/v1/nevobo_sync_state') result=[syncState];
  if(url.pathname==='/rest/v1/matches') result=[testMatch];
  if(url.pathname==='/rest/v1/club_branding') result=[brand];
  if(url.pathname==='/rest/v1/teams') result=[{id:teamId,name:'Testteam',age_class:'senior'}];
@@ -74,6 +100,7 @@ const mock=createServer(async(req,res)=>{
    result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamId,captain:false,norm_override:null}));
  }
  if(url.pathname==='/rest/v1/duties') result=[testDuty];
+ if(url.pathname==='/rest/v1/enrollments' && (!url.searchParams.get('member_id') || url.searchParams.get('member_id')==='eq.'+memberA)) result=[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}];
  if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]}];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
@@ -84,7 +111,7 @@ const mock=createServer(async(req,res)=>{
 });
 mock.listen(0,'127.0.0.1');await once(mock,'listening');mockUrl=`http://127.0.0.1:${mock.address().port}`;
 const port=Number(process.env.PERFORMANCE_TEST_PORT ?? 3011),base=`http://localhost:${port}`;
-const app=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...process.env,NEXT_PUBLIC_SUPABASE_URL:mockUrl,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_local_test',NEXT_PUBLIC_SITE_URL:base},stdio:['ignore','pipe','pipe']});
+const app=spawn(process.execPath,['--import',new URL('./test-network.mjs',import.meta.url).href,'node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port',String(port)],{env:{...process.env,AVV_TEST_NETWORK_URL:mockUrl,CRON_SECRET:cronToken,RESEND_API_KEY:'local-test-resend-key',NOTIFICATION_FROM_EMAIL:'club@example.test',SUPABASE_SERVICE_ROLE_KEY:'local-test-service-role',NEXT_PUBLIC_SUPABASE_URL:mockUrl,NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY:'sb_publishable_local_test',NEXT_PUBLIC_SITE_URL:base},stdio:['ignore','pipe','pipe']});
 let logs='';app.stdout.on('data',d=>logs+=d);app.stderr.on('data',d=>logs+=d);
 let browser;
 try {
@@ -157,6 +184,12 @@ try {
  await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.ok(testNotification.read_at);
  const forbiddenWorker=await fetch(base+'/api/nevobo/notifications');assert.equal(forbiddenWorker.status,401);
+ // Closing new signup must preserve the owner's original 24-hour withdrawal.
+ testDuty.signup_closed=true;
+ await page.goto(base+'/diensten?view=mine');
+ await page.getByRole('button',{name:'Afmelden',exact:true}).waitFor();
+ assert.doesNotMatch((await load('/diensten',cookieB)).html,/Testdienst/);
+ testDuty.signup_closed=false;
  // Exercise the original admin flow, rejected credentials and both email-link formats.
  const adminPage=await browser.newPage();adminPage.setDefaultTimeout(10000);await adminPage.goto(base+'/login');
  await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
@@ -223,6 +256,38 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),adminPage.getByRole('button',{name:'Bevestigen',exact:true}).click()]);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/cancel_duty')).length,1);
  assert.equal(testDuty.cancelled,true);
+ // Exercise the actual RSS adapter and server endpoints through a local-only
+ // network preloader. PostgreSQL behaviour is independently tested with PGlite.
+ assert.equal((await fetch(base+'/api/nevobo/sync')).status,401);
+ const syncRequest=()=>fetch(base+'/api/nevobo/sync',{method:'POST',headers:{Authorization:'Bearer '+cronToken}});
+ const imported=await syncRequest();assert.equal(imported.status,200);
+ const importResult=await imported.json();assert.equal(importResult.counts.inserted,1);
+ assert.equal(testMatch.external_id,'nevobo:1964526');assert.equal(testMatch.starts_at,'2026-11-14T13:30:00.000Z');
+ assert.equal(testMatch.postal_code,'3815XT');assert.equal(sentEmails.length,0);
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.getByRole('button',{name:'Nu synchroniseren'}).click();
+ await adminPage.getByRole('status').filter({hasText:/Import voltooid/}).waitFor();
+ refAssigned=true;programXml=actualProgram.replaceAll('14:30','15:30');
+ const changed=await syncRequest();assert.equal(changed.status,200);assert.equal((await changed.json()).counts.updated,1);
+ assert.equal(sentEmails.length,1);assert.equal(sentEmails[0].key,'nevobo-'+testNotification.id);
+ assert.deepEqual(sentEmails[0].body.to,['anna@example.test']);
+ await syncRequest();assert.equal(sentEmails.length,1,'Een identieke import verstuurt geen nieuwe mail');
+ const previousApplyCount=authWrites.filter(r=>r.path.endsWith('/apply_nevobo_snapshot')).length;
+ programXml='<html>Temporary upstream error</html>';
+ assert.equal((await syncRequest()).status,503);
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/apply_nevobo_snapshot')).length,previousApplyCount);
+ assert.equal(testMatch.starts_at,'2026-11-14T14:30:00.000Z','Een defecte bron wist de planning niet');
+ programXml=actualProgram;
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.getByRole('button',{name:'Testmelding naar mij'}).click();
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(sentEmails.length,2);assert.deepEqual(sentEmails[1].body.to,['admin@example.test']);
+ assert.equal(additionalNotifications[0].member_id,admin);
+ await adminPage.goto(base+'/meldingen');
+ await adminPage.getByRole('heading',{name:/^Testmelding wedstrijdkoppeling(?:\s*Ongelezen)?$/}).waitFor();
+ await page.goto(base+'/meldingen');
+ assert.equal(await page.getByRole('heading',{name:/^Testmelding wedstrijdkoppeling(?:\s*Ongelezen)?$/}).count(),0);
+ console.log('Nevobo-integratie geslaagd: echt aangeleverd RSS-item, beveiligde cronroute, handmatige sync, wijzigingsmail, idempotentie en behoud bij bronfout. RSS en Resend uitsluitend lokaal nagebootst.');
  const screenshots=process.env.SCREENSHOT_DIR;
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {

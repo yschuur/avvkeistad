@@ -6,6 +6,7 @@ alter table public.matches add column if not exists status text not null default
  check(status in ('scheduled','played','cancelled','postponed','missing'));
 alter table public.matches add column if not exists address text;
 alter table public.matches add column if not exists city text;
+alter table public.matches add column if not exists postal_code text;
 alter table public.matches add column if not exists court text;
 alter table public.matches add column if not exists match_code text;
 alter table public.matches add column if not exists source_url text;
@@ -47,9 +48,13 @@ alter table public.nevobo_sync_state enable row level security;
 alter table public.match_events enable row level security;
 alter table public.notifications enable row level security;
 alter table public.notification_email_outbox enable row level security;
+drop policy if exists nevobo_state_read on public.nevobo_sync_state;
 create policy nevobo_state_read on public.nevobo_sync_state for select to authenticated using(true);
+drop policy if exists match_events_manager_read on public.match_events;
 create policy match_events_manager_read on public.match_events for select to authenticated using(public.is_manager());
+drop policy if exists notifications_read on public.notifications;
 create policy notifications_read on public.notifications for select to authenticated using(member_id=auth.uid() or public.is_manager());
+drop policy if exists outbox_manager_read on public.notification_email_outbox;
 create policy outbox_manager_read on public.notification_email_outbox for select to authenticated using(public.is_manager());
 revoke all on public.nevobo_sync_state,public.match_events,public.notifications,public.notification_email_outbox from public,anon,authenticated;
 grant select(last_started_at,last_success_at,last_error_code,feed_published_at,imported_count,updated_count) on public.nevobo_sync_state to authenticated;
@@ -84,7 +89,7 @@ $$;
 create or replace function public.nevobo_match_state(p_match public.matches) returns jsonb
 language sql immutable set search_path='' as $$
  select jsonb_build_object('starts_at',p_match.starts_at,'home_team',p_match.home_team,'away_team',p_match.away_team,
- 'location',p_match.location,'address',p_match.address,'city',p_match.city,'court',p_match.court,'status',p_match.status);
+ 'location',p_match.location,'address',p_match.address,'postal_code',p_match.postal_code,'city',p_match.city,'court',p_match.court,'status',p_match.status);
 $$;
 create or replace function public.apply_nevobo_snapshot(p_lease uuid,p_season uuid,p_matches jsonb,p_published timestamptz,p_complete boolean default false) returns jsonb
 language plpgsql security definer set search_path='' as $$
@@ -107,7 +112,7 @@ begin
   loop
    p_matches:=p_matches||jsonb_build_array(jsonb_build_object('external_id',before_row.external_id,'home_team',before_row.home_team,
     'away_team',before_row.away_team,'starts_at',before_row.starts_at,'location',before_row.location,'level',before_row.level,
-    'address',before_row.address,'city',before_row.city,'court',before_row.court,'match_code',before_row.match_code,
+    'address',before_row.address,'postal_code',before_row.postal_code,'city',before_row.city,'court',before_row.court,'match_code',before_row.match_code,
     'source_url',before_row.source_url,'source_description',before_row.source_description,'source_details',before_row.source_details,
     'is_home',before_row.is_home,'status','missing'));
   end loop;
@@ -116,15 +121,16 @@ begin
   if nullif(item->>'external_id','') is null or nullif(item->>'home_team','') is null or nullif(item->>'away_team','') is null then raise exception 'Wedstrijdgegevens onvolledig.';end if;
   start_time:=(item->>'starts_at')::timestamptz;
   select * into before_row from public.matches where external_id=item->>'external_id' for update;
-  if found and before_row.season_id<>p_season then skipped:=skipped+1;continue;end if;
+  if found and start_time is null and item->>'status' in ('cancelled','played') then start_time:=before_row.starts_at;end if;
+  if before_row.id is not null and before_row.season_id<>p_season then skipped:=skipped+1;continue;end if;
   if before_row.id is null and start_time is not null and ((start_time at time zone 'Europe/Amsterdam')::date<s.starts_on or (start_time at time zone 'Europe/Amsterdam')::date>s.ends_on) then skipped:=skipped+1;continue;end if;
-  insert into public.matches(season_id,external_id,home_team,away_team,starts_at,location,level,cancelled,status,address,city,court,
+  insert into public.matches(season_id,external_id,home_team,away_team,starts_at,location,level,cancelled,status,address,postal_code,city,court,
     match_code,source_url,source_description,source_details,is_home,synced_at,last_seen_at)
    values(p_season,item->>'external_id',item->>'home_team',item->>'away_team',start_time,coalesce(item->>'location',''),coalesce(item->>'level',''),
-    item->>'status'='cancelled',coalesce(item->>'status','scheduled'),item->>'address',item->>'city',item->>'court',item->>'match_code',item->>'source_url',
+    item->>'status'='cancelled',coalesce(item->>'status','scheduled'),item->>'address',item->>'postal_code',item->>'city',item->>'court',item->>'match_code',item->>'source_url',
     item->>'source_description',coalesce(item->'source_details','{}'),(item->>'is_home')::boolean,now(),case when item->>'status'='missing' then before_row.last_seen_at else now() end)
    on conflict(external_id) do update set home_team=excluded.home_team,away_team=excluded.away_team,starts_at=excluded.starts_at,
-    location=excluded.location,level=excluded.level,cancelled=excluded.cancelled,status=excluded.status,address=excluded.address,
+    location=excluded.location,level=excluded.level,cancelled=excluded.cancelled,status=excluded.status,address=excluded.address,postal_code=excluded.postal_code,
     city=excluded.city,court=excluded.court,match_code=excluded.match_code,source_url=excluded.source_url,source_description=excluded.source_description,
     source_details=excluded.source_details,is_home=excluded.is_home,synced_at=now(),last_seen_at=excluded.last_seen_at
    returning * into after_row;
@@ -140,10 +146,13 @@ begin
   notification_title:=case event_kind when 'cancelled' then 'Wedstrijd afgelast' when 'unconfirmed' then 'Wedstrijdstatus niet bevestigd'
    when 'postponed' then 'Wedstrijd uitgesteld' when 'restored' then 'Wedstrijd opnieuw ingepland' else 'Wedstrijd gewijzigd' end;
   notification_body:=format('%s – %s',after_row.home_team,after_row.away_team)||E'\n'||
-   'Vorige planning: '||coalesce(to_char(before_row.starts_at at time zone 'Europe/Amsterdam','DD-MM-YYYY HH24:MI'),'niet vastgesteld')||' · '||coalesce(nullif(before_row.location,''),'locatie niet vermeld')||E'\n'||
-   'Nieuwe planning: '||coalesce(to_char(after_row.starts_at at time zone 'Europe/Amsterdam','DD-MM-YYYY HH24:MI'),'niet vastgesteld')||' · '||coalesce(nullif(after_row.location,''),'locatie niet vermeld')||E'\n'||
+   'Vorige planning: '||coalesce(to_char(before_row.starts_at at time zone 'Europe/Amsterdam','DD-MM-YYYY HH24:MI'),'niet vastgesteld')||' · '||coalesce(nullif(concat_ws(', ',nullif(before_row.location,''),nullif(before_row.address,''),nullif(concat_ws(' ',before_row.postal_code,before_row.city),''),case when before_row.court is not null then 'Veld '||before_row.court end),''),'locatie niet vermeld')||E'\n'||
+   'Nieuwe planning: '||coalesce(to_char(after_row.starts_at at time zone 'Europe/Amsterdam','DD-MM-YYYY HH24:MI'),'niet vastgesteld')||' · '||coalesce(nullif(concat_ws(', ',nullif(after_row.location,''),nullif(after_row.address,''),nullif(concat_ws(' ',after_row.postal_code,after_row.city),''),case when after_row.court is not null then 'Veld '||after_row.court end),''),'locatie niet vermeld')||E'\n'||
    case event_kind when 'cancelled' then 'Nevobo meldt dat de wedstrijd is afgelast.' when 'unconfirmed' then 'De wedstrijd ontbreekt in het actuele programma. Dit is geen bevestigde afgelasting. Inschrijven is geblokkeerd totdat de planning bevestigd is.'
     when 'postponed' then 'Nevobo meldt dat de wedstrijd is uitgesteld. Controleer de nieuwe planning zodra die beschikbaar is.' else 'Controleer of deze planning nog past bij je andere diensten. Je toewijzing blijft behouden.' end;
+  -- Lock before reading recipients: an enrollment that was already in flight
+  -- must finish before the recipient snapshot, or observe the closed duty.
+  perform 1 from public.duties where match_id=after_row.id and kind='referee' for update;
   if event_kind<>'played' then
    insert into public.notifications(member_id,event_id,match_id,title,body)
     select distinct e.member_id,event_uuid,after_row.id,notification_title,notification_body
@@ -155,10 +164,10 @@ begin
   end if;
   for old_duty in select * from public.duties where match_id=after_row.id and kind='referee' for update loop
    new_start:=coalesce(after_row.starts_at,old_duty.starts_at);
-   update public.duties set starts_at=new_start,ends_at=new_start+(old_duty.ends_at-old_duty.starts_at),
+   update public.duties set title=case when old_duty.title=left(before_row.home_team||' – '||before_row.away_team,200) then left(after_row.home_team||' – '||after_row.away_team,200) else old_duty.title end,starts_at=new_start,ends_at=new_start+(old_duty.ends_at-old_duty.starts_at),
     location=coalesce(nullif(after_row.location,''),old_duty.location),
     signup_closed=after_row.status<>'scheduled' or after_row.starts_at is null or after_row.starts_at<=now(),
-    credit_blocked=after_row.status in ('missing','postponed') or after_row.starts_at is null,
+    credit_blocked=after_row.status in ('missing','postponed') or (after_row.starts_at is null and after_row.status<>'played'),
     cancelled=case when after_row.status='cancelled' then true when old_duty.nevobo_cancelled then false else old_duty.cancelled end,
     nevobo_cancelled=case when after_row.status='cancelled' and not old_duty.cancelled then true when after_row.status='cancelled' then old_duty.nevobo_cancelled else false end
     where id=old_duty.id;
@@ -181,6 +190,7 @@ begin
  return new;
 end;
 $$;
+drop trigger if exists match_enrollment_guard on public.enrollments;
 create trigger match_enrollment_guard before insert or update of duty_id,member_id,revoked on public.enrollments for each row execute function public.guard_match_enrollment();
 create or replace function public.create_match_referee_duty(p_match uuid,p_points numeric,p_minutes integer,p_level integer) returns uuid
 language plpgsql security definer set search_path='' as $$

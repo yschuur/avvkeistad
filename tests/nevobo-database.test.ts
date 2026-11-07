@@ -58,8 +58,17 @@ test('Nevobo database: import, idempotentie, wijziging, annulering, inschrijfsto
   await db.query('update duties set capacity=2 where id=$1',[duty.id]);
   const postponed={...moved,status:'postponed' as const,starts_at:null};await sync([postponed]);await db.exec('reset role');
   const blocked=await first<{signup_closed:boolean;credit_blocked:boolean}>('select signup_closed,credit_blocked from duties where id=$1',[duty.id]);assert.equal(blocked.signup_closed,true);assert.equal(blocked.credit_blocked,true);
+  await sync([{...postponed,status:'played'}]);await db.exec('reset role');
+  assert.equal((await first<{credit_blocked:boolean}>('select credit_blocked from duties where id=$1',[duty.id])).credit_blocked,false,'Een bevestigde uitslag houdt punten niet blijvend vast als een nieuwe datum ontbreekt');
   await as(other);await assert.rejects(db.query('select enroll($1)',[duty.id]),/wedstrijd is niet beschikbaar/);
-  await sync([moved]);await sync([],true);await db.exec('reset role');
+  await sync([moved]);
+  const unrelated={...fixture,external_id:'test-nevobo-other-id'};
+  await sync([unrelated],true);await db.exec('reset role');
+  assert.equal((await first<{status:string}>('select status from matches where id=$1',[match.id])).status,'missing');
+  const uncertain=await first<{cancelled:boolean;credit_blocked:boolean}>('select cancelled,credit_blocked from duties where id=$1',[duty.id]);
+  assert.equal(uncertain.cancelled,false);assert.equal(uncertain.credit_blocked,true);
+  assert.ok((await db.query("select id from notifications where title='Wedstrijdstatus niet bevestigd'")).rows.length);
+  await sync([moved,unrelated],true);await sync([],true);await db.exec('reset role');
   assert.equal((await first<{status:string}>('select status from matches where id=$1',[match.id])).status,'scheduled','Een lege feed is geen bevestigde afgelasting');
   await as(admin);await db.query('select cancel_duty($1)',[duty.id]);await sync([{...moved,location:'Nog een testlocatie'}]);await db.exec('reset role');
   assert.equal((await first<{cancelled:boolean}>('select cancelled from duties where id=$1',[duty.id])).cancelled,true,'Handmatig geannuleerde dienst wordt niet heropend');
@@ -67,5 +76,9 @@ test('Nevobo database: import, idempotentie, wijziging, annulering, inschrijfsto
   await db.query('update duties set cancelled=false,signup_closed=false where id=$1',[duty.id]);
   await db.query("update matches set starts_at=now()-interval '1 minute' where id=$1",[match.id]);
   await as(other);await assert.rejects(db.query('select enroll($1)',[duty.id]),/wedstrijd is niet beschikbaar/);
+  await db.exec('reset role');
+  const beforeReapply=(await db.query('select id,member_id,duty_id,revoked from enrollments order by id')).rows;
+  await db.exec(await readFile(new URL('../supabase/migrations/003_nevobo_matches.sql',import.meta.url),'utf8'));
+  assert.deepEqual((await db.query('select id,member_id,duty_id,revoked from enrollments order by id')).rows,beforeReapply);
  } finally {await db.close();}
 });

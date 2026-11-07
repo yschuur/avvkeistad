@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Item supplied by the user on 2026-11-07; wrapper is only test scaffolding. -->
+<rss version="2.0" xmlns:nevobo="urn:nevobo"><channel><title>Programma</title>
+<item>
+<title>
+<![CDATA[ 14 nov 14:30: Proglass/AVV Keistad DS 2 - Lammerink Installatiegroep/Set-Up '65 DS 1 ]]>
+</title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/1964526</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/1964526</guid>
+<description>
+<![CDATA[ Wedstrijd: 9000TAD DB, Datum: zaterdag 14 november, 14:30, Speellocatie: Sportcomplex Amerena, De Velduil 2, 3815XT Amersfoort ]]>
+</description>
+<pubDate>Sat, 14 Nov 2026 14:30:00 +0100</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+</channel></rss>

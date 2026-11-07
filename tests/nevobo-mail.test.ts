@@ -12,8 +12,8 @@ test('wedstrijdinschrijving sluit bij aanvang en bij niet-bevestigde of geannule
  assert.equal(canRegisterForMatch({...m,starts_at:now.toISOString()},now),false);
 });
 test('cron vereist de exacte server-token; ontbrekende configuratie is geen toegang',()=>{
- assert.equal(isCronAuthorized(null,'test-secret'),false);assert.equal(isCronAuthorized('Bearer test-secret','test-secret'),true);
- assert.equal(isCronAuthorized('Bearer other','test-secret'),false);assert.equal(isCronAuthorized('Bearer test-secret',''),false);
+ assert.equal(isCronAuthorized(null,'local-test-secret-at-least-32-characters'),false);assert.equal(isCronAuthorized('Bearer local-test-secret-at-least-32-characters','local-test-secret-at-least-32-characters'),true);
+ assert.equal(isCronAuthorized('Bearer other','local-test-secret-at-least-32-characters'),false);assert.equal(isCronAuthorized('Bearer local-test-secret-at-least-32-characters',''),false);
 });
 test('wijzigingsmail heeft een stabiele idempotentiesleutel en bevat de werkelijke melding',async()=>{
  assert.equal(mailConfig({}),null);

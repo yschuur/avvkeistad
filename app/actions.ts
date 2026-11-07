@@ -6,6 +6,9 @@ import { fromZonedTime } from 'date-fns-tz';
 import { z } from 'zod';
 import { configured, supabase } from '@/lib/supabase/server';
 import { HEX_COLOR } from '@/lib/branding';
+import { serviceClient,synchronizeMatches } from '@/lib/nevobo/service';
+import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
+import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
 import { loginError } from '@/lib/auth-errors';
 
 const id = z.uuid();
@@ -161,5 +164,35 @@ export async function createMatchDuty(f:FormData) {
    p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
    p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),p_level:z.number().int().min(0).max(10).parse(number(f.get('level'))),
   });if(error) throw new Error(error.message);
+ });
+}
+
+export async function syncNevobo() {
+ await manager();
+ let message='';let failed=false;
+ try {
+  const result=await synchronizeMatches(serviceClient(),loadNevoboProgram);
+  if(result.status==='busy') message='Er loopt al een synchronisatie. Probeer het over enkele minuten opnieuw.';
+  else {
+   const counts=z.object({inserted:z.number(),updated:z.number(),skipped:z.number()}).parse(result.counts);
+   message=`Import voltooid: ${counts.inserted} nieuw, ${counts.updated} gewijzigd, ${counts.skipped} buiten het actieve seizoen.`;
+   if('configured' in result.mail && !result.mail.configured) message+=' E-mail is nog niet ingesteld; appmeldingen worden wel opgeslagen.';
+   if('error' in result.mail || ('failed' in result.mail && result.mail.failed>0)) message+=' Niet-verstuurde e-mails blijven in de verzendwachtrij.';
+  }
+ }catch(error){failed=true;message=syncErrorMessage(error instanceof Error?error.message:'');}
+ revalidatePath('/', 'layout');
+ redirect('/wedstrijden?'+(failed?'error=':'success=')+encodeURIComponent(message));
+}
+
+export async function testMatchNotifications() {
+ await run('/wedstrijden',async()=>{
+  const {user}=await manager();const config=mailConfig();
+  if(!config) throw new Error('Stel eerst de Resend API-sleutel, het afzenderadres en de site-URL in.');
+  const recipient=z.email().safeParse(user.email);if(!recipient.success) throw new Error('Je account heeft geen geldig e-mailadres.');
+  const service=serviceClient();
+  const {data,error}=await service.from('notifications').insert({member_id:user.id,title:'Testmelding wedstrijdkoppeling',body:'Dit is de door jou aangevraagde testmelding voor de wedstrijdkoppeling.'}).select('id,title,body').single();
+  if(error || !data) throw new Error('De testmelding kon niet worden opgeslagen. Controleer migratie 003.');
+  const result=await sendMatchEmail({outbox_id:'',claim:'',notification_id:data.id,recipient:recipient.data,subject:data.title,body:data.body},config);
+  if(!result.sent) throw new Error('De testmelding staat in de app, maar de mail kon niet worden verstuurd. Controleer het geverifieerde afzenderdomein en de API-sleutel in Resend.');
  });
 }
