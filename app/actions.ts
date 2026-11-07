@@ -1,10 +1,11 @@
 'use server';
 import { redirect } from 'next/navigation';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, updateTag } from 'next/cache';
 import { createClient } from '@supabase/supabase-js';
 import { fromZonedTime } from 'date-fns-tz';
 import { z } from 'zod';
 import { configured, supabase } from '@/lib/supabase/server';
+import { HEX_COLOR } from '@/lib/branding';
 import { loginError } from '@/lib/auth-errors';
 
 const id = z.uuid();
@@ -20,7 +21,7 @@ const manager = async () => {
   return { db, role: data.role, user };
 };
 async function run(path: string, fn: () => Promise<void>) {
-  if (!configured()) redirect(`${path}?error=${encodeURIComponent('Dit zijn voorbeeldgegevens. Koppel Supabase om wijzigingen op te slaan.')}`);
+  if (!configured()) redirect(`${path}?error=${encodeURIComponent('De applicatie is nog niet ingesteld. Neem contact op met de beheerder.')}`);
   let error: string | null = null;
   try { await fn(); } catch (e) { error = e instanceof z.ZodError ? 'Controleer de ingevulde gegevens.' : e instanceof Error ? e.message : 'De actie is niet gelukt.'; }
   revalidatePath('/', 'layout');
@@ -137,4 +138,16 @@ export async function saveFunction(f: FormData) {
 }
 export async function removeFunction(f: FormData) {
   await run('/beheer', async () => {const {db}=await manager();const {error}=await db.rpc('remove_function',{p_assignment:id.parse(f.get('assignment_id'))});if(error) throw new Error(error.message);});
+}
+
+export async function saveBranding(f: FormData) {
+  await run('/beheer/instellingen/huisstijl',async()=>{
+    const {db}=await manager();
+    const color=z.string().length(7).regex(HEX_COLOR);
+    const primary=color.parse(text(f,'primaryColor')).toUpperCase();
+    const secondary=color.parse(text(f,'secondaryColor')).toUpperCase();
+    const {error}=await db.rpc('save_club_branding',{p_primary:primary,p_secondary:secondary});
+    if(error) throw new Error('De kleuren konden niet worden opgeslagen. Controleer de huisstijlmigratie en je beheerrechten.');
+    updateTag('club-branding');
+  });
 }

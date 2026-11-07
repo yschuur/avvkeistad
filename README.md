@@ -1,6 +1,6 @@
 # AVV Keistad · Vrijwilligersportaal
 
-Next.js-app voor Vercel met Supabase Auth en PostgreSQL. Zonder Supabase-instellingen draait een **alleen-lezen voorbeeldomgeving**. Voorbeeldleden zijn fictief. Er worden nooit voorbeeldgegevens naar Supabase geschreven.
+Next.js-app voor Vercel met Supabase Auth en PostgreSQL. Zonder Supabase-instellingen toont de applicatie een configuratiemelding. Er is geen voorbeeldadministratie of automatische demo-identiteit. Lees `DESIGN_SYSTEM.md` en `AGENTS.md` voordat je UI wijzigt.
 
 ## Lokaal werken
 
@@ -19,7 +19,7 @@ npm test
 npm run build
 ```
 
-De databasetest voert de daadwerkelijke migratie uit in een geïsoleerde PostgreSQL-runtime (PGlite). Hij test rechten, inschrijvingen, overlap, bevoegdheid, de 24-uursgrens, overdracht en intrekken na afloop. Dit vervangt geen integratietest met Supabase Auth en e-mail. Browsercontrole: `npm run test:browser` met een draaiende app; gebruikt de geïnstalleerde Chromium of `CHROMIUM_PATH`.
+De databasetest voert de daadwerkelijke migratie uit in een geïsoleerde PostgreSQL-runtime (PGlite). Hij test rechten, inschrijvingen, overlap, bevoegdheid, de 24-uursgrens, overdracht en intrekken na afloop. Dit vervangt geen integratietest met Supabase Auth en e-mail. Browsercontrole: voer na `npm run build` de opdracht `npm run test:browser` uit. Die start zelf een geïsoleerde lokale Next-server en testbackend; gebruikt de geïnstalleerde Chromium of `CHROMIUM_PATH`. Er worden geen echte clubaccounts of gegevens gebruikt.
 
 ## 1. Supabase aanmaken
 
@@ -54,7 +54,7 @@ Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. M
 
 ## 3. Vercel koppelen
 
-1. Zorg dat deze code op GitHub in `yschuur/avvkeistad` staat. De repository was bij aanvang leeg; deze lokale wijzigingen zijn niet automatisch gepusht.
+1. Zorg dat deze code op GitHub in `yschuur/avvkeistad` staat. Vercel bouwt wijzigingen vanuit de branch `main`; controleer bij elke publicatie de status van de deployment.
 2. Maak via https://vercel.com een account aan met GitHub en kies **Add New → Project**. Importeer de repository. Framework: Next.js; root: de root van de repository; build: `npm run build`.
 3. Voeg onderstaande variabelen toe in **Settings → Environment Variables**. Gebruik voor previews liefst een apart Supabase-project; een preview mag niet onbedoeld echte leden wijzigen.
 
@@ -86,13 +86,13 @@ Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. M
 ## Nog te voltooien vóór clubbrede ingebruikname
 
 - **Nevobo-import:** nog niet geïmplementeerd. De actuele officiële databron, velden, competitiemapping, thuiswedstrijden en wijzigings-/annuleringsregels moeten worden geverifieerd. Een proefrequest naar `api.nevobo.nl` werd door de cloudnetwerkpolicy geweigerd; dit bewijst niets over de beschikbaarheid of inhoud van die bron. Er is bewust geen fictieve synchronisatie of cronjob opgenomen. Het wedstrijdscherm meldt dit expliciet.
-- Supabase-project, echte login, uitnodigingen en SMTP zijn nog niet live getest; er zijn nog geen credentials beschikbaar.
+- De gebruiker heeft een werkende live login bevestigd. Uitnodigingen, SMTP en nieuwe migraties moeten nog op het eigen project worden gecontroleerd; de ontwikkeltests gebruiken een lokale testbackend.
 - Wijzigingen aan wedstrijdtijden moeten uiteindelijk meldingen en conflictcontrole opleveren. Automatische e-mailherinneringen en wijzigingsmeldingen zijn nog niet ingebouwd.
 - Scheidsrechtersniveaus zijn voorlopig genummerd 0–10. De concrete Nevobo-opleidingen en toegestane competities moeten aan deze niveaus worden gekoppeld voordat automatische fluitdiensten actief worden.
 - De eerste versie beheert één actief seizoen; een apart seizoenarchief en seizoenwisselscherm volgen. Rapportage bevat nu team- en tekortfilters en CSV; uitgebreide periode-/functie-/dienstfilters volgen.
 - Dienstannulering is beschikbaar; tijd wijzigen en gehele reeksen aanpassen met meldingen volgen.
 
-Er is niets naar Vercel gedeployd en er zijn nog geen echte leden uitgenodigd.
+De gebruiker beheert de live deployment via Vercel. Lokale tests tonen niet aan dat een nieuwe deployment of migratie al op productie is toegepast.
 
 ## Responsiviteit en performance
 
@@ -113,3 +113,15 @@ Open `/login` en kies **Wachtwoord vergeten?**. De app vraagt een herstelmail aa
 ```
 
 Bij de nieuwe link kun je een wachtwoord van minimaal 12 tekens instellen. Een succesvolle aanvraag toont dezelfde tekst voor bestaande en onbekende adressen. De e-mailaflevering blijft afhankelijk van Supabase SMTP en verzendlimieten; de lokale integratietest verstuurt geen echte e-mail. Inlogmeldingen onderscheiden onjuiste credentials, onbevestigd e-mailadres, blokkering, rate limits en tijdelijke onbereikbaarheid zonder providerdetails of sleutels te tonen. Wachtwoorden worden exact doorgegeven, inclusief eventuele spaties aan begin en einde.
+
+## Huisstijl en designsysteem
+
+`DESIGN_SYSTEM.md` is de centrale standaard; `AGENTS.md` verplicht hergebruik ervan. De app gebruikt neutrale tokens en compacte lijsten/tabellen. Er is geen automatische demo-inhoud.
+
+Voer op een bestaand project uitsluitend `supabase/migrations/002_club_branding.sql` uit om de huisstijlopslag toe te voegen. Op een nieuw project eerst 001, daarna 002. Migratie 002 voegt alleen een singleton-huisstijltabel, leesbeleid en beveiligde opslagfunctie toe; bestaande kleuren worden bij herhaald uitvoeren niet overschreven. Bestaande leden, rollen, punten en diensten blijven intact.
+
+Admin en beheerder vinden de editor onder **Beheer → Instellingen → Huisstijl** (`/beheer/instellingen/huisstijl`). Primaire en secundaire kleur hebben een color picker en HEX-invoer met directe lokale preview. Opslaan maakt de kleuren clubbreed beschikbaar, ook na herladen/inloggen. Standaardkleuren herstellen vult de bestaande applicatiedefaults in; druk daarna op Opslaan. Voorgronden en focuskleuren worden automatisch aangepast voor contrast.
+
+Alleen kleuren zijn publiek leesbaar; de identiteit van de editor is niet publiek uitleesbaar. Alleen admin/manager kan via de opslagfunctie schrijven. De app behoudt standaardkleuren als de migratie nog ontbreekt of de instelling niet kan worden opgehaald. De editor meldt dit en schakelt Opslaan uit. Na toepassen van de migratie de pagina herladen. Publieke kleurgegevens hebben een cache van 60 seconden; opslaan wist de cache direct.
+
+`npm test` test onder meer de nieuwe migratie met daadwerkelijke PostgreSQL-rechten en kleurcontrast voor een RGB-steekproef. `npm run test:browser` en `npm run test:performance` gebruiken dezelfde lokale integratiesuite, inclusief huisstijlpreview, bewaren/herladen/reset, mobiele navigatie en bestaande auth-/herstelflows. `SCREENSHOT_DIR` kan een uitvoermap voor screenshots van uitsluitend deze testomgeving instellen.

@@ -1,0 +1,80 @@
+# AVV Keistad — designsysteem
+
+Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting is geïnspireerd op de informatiedichtheid en rust van Linear, zonder de interface te kopiëren.
+
+## Principes
+
+Functionaliteit boven decoratie. Compacte typografie, neutrale vlakken, dunne borders en een voorspelbare navigatie. Geen hero's, illustraties, slogans, gradients, glows, decoratieve iconen of opvallende schaduwen. Gebruik iconen alleen voor navigatie, bediening of een betekenisvolle status. Gebruik semantische HTML.
+
+## Content
+
+Gebruik uitsluitend gegevens uit database, bestaande configuratie of een concrete gebruikersinvoer. Geen fictieve namen, datums, activiteiten, aantallen, quotes of marketingteksten. Zonder Supabase-configuratie verschijnt het inlogscherm met een configuratiemelding; nooit een demo-identiteit of voorbeeldadministratie. Testfixtures staan uitsluitend in tests/scripts en worden niet geïmporteerd door applicatiecode.
+
+Een niet-ingesteld seizoen is onbekende informatie: toon een streepje, geen verzonnen norm of voortgang. Gebruik korte empty states zoals ‘Geen diensten ingepland.’ Een lege lijst is een geldig scherm. Aantallen en punten worden alleen uit de beschikbare gegevens berekend. Labels voor componentvoorbeelden in de huisstijlpreview zijn als zodanig herkenbaar en bevatten geen clubgegevens.
+
+## Tokens
+
+De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens en contrastfuncties in `lib/branding.ts`. `app/layout.tsx` past opgeslagen kleuren toe op het html-element. Hardcode geen clubkleuren in componenten.
+
+| Rol | Token | Waarde / bron |
+| --- | --- | --- |
+| Canvas | `--canvas` | #fcfcfd |
+| Oppervlak | `--surface` | #ffffff |
+| Sidebar / subtiel vlak | `--surface-subtle` | #f7f8fa |
+| Hover | `--surface-hover` | #eef0f3 |
+| Border | `--border` | #e3e5e9 |
+| Sterkere border | `--border-strong` | #c9cdd4 |
+| Primaire tekst | `--text` | #24262d |
+| Secundaire tekst | `--text-muted` | #656b76 |
+| Primaire clubkleur | `--brand-primary` | Database, standaard #087d56 uit de bestaande app |
+| Secundaire clubkleur | `--brand-secondary` | Database, standaard #6483b8 uit de bestaande app |
+| Primaire actie | `--accent`, `--on-accent` | Clubkleur en automatisch zwart/wit met minimaal 4,5:1 contrast |
+| Actieve tekst / selectie | `--accent-text`, `--accent-subtle` | Afgeleid van primaire kleur; minimaal 4,5:1 tekstcontrast |
+| Ingeplande voortgang | `--secondary-text` | Secundaire kleur, zo nodig donkerder voor contrast |
+| Succes | `--success`, `--success-bg` | #24613f / #eff6f1 |
+| Fout / destructief | `--danger`, `--danger-bg` | #a12b35 / #fdf1f2 |
+| Waarschuwing | `--warning`, `--warning-bg` | #805b1a / #faf5e9 |
+
+De defaults zijn applicatiekleuren, geen claim over een officiële clubhuisstijl. Achtergronden en basistekst blijven neutraal. Primaire kleur is voor primaire acties, actieve navigatie en focus; secundaire kleur uitsluitend voor onderscheid tussen behaalde en ingeplande punten en de huisstijlpreview. Typebadges zijn neutraal: een diensttype is geen waarschuwing of successtatus.
+
+Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 13px / 1,5; paginatitel 22px / 1,3, sectietitel 14px / 1,4, tabel en labels 12px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
+
+Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: 4px voor badges, 6px voor bediening, 8px voor panelen/dialogs. Borders 1px. Geen schaduw op kaarten, tabellen of knoppen; uitsluitend een kleine schaduw op een overlay die boven inhoud ligt. Sidebar 224px; hoofdinhoud maximaal 1440px.
+
+## Gedeelde componenten
+
+- `Shell`: desktop-sidebar, mobiele menu-button/drawer, clubnaam, huidig seizoen en ingelogd profiel. Mobiele drawer sluit op Escape, backdrop of navigatie en houdt toetsenbordfocus binnen het menu; focus keert terug naar de trigger. Een skiplink gaat naar de hoofdinhoud.
+- `Nav`: actieve pagina met `aria-current`, iconen van 16px, leesbare labels op mobiel, directe feedback tijdens navigatie. Instellingen staat bij Beheer; alleen admin/manager ziet deze toegang.
+- `Heading`: één korte h1, optionele nuttige toelichting en rechts de relevante primaire actie. Geen eyebrow of standaardbeschrijving op elke pagina.
+- `DutyCard`: bestaande export blijft behouden, maar rendert een compacte lijstregel met datum, dienst, type, locatie, bezetting, punten en bestaande inschrijf-/overnameacties. Mobiel stapelt dezelfde informatie.
+- `SubmitButton`: spinner en disabled tijdens serveractie, bestaande actie/naam/waarde blijven intact. Standaard één primaire actie per formulier. Secundaire acties zijn neutraal; destructieve acties hebben een rood tekstaccent.
+- `ConfirmSubmitButton`: gebruikt een native dialog voor bestaande destructieve acties. Annuleren en Escape muteren niets; bevestigen verstuurt het oorspronkelijke formulier inclusief submitter. Geen nieuwe businessactie.
+- Tabellen: compacte rijen, subtiele header, hover, links uitgelijnde tekst en herkenbare numerieke kolommen. Geen kaart rond iedere rij. Tabelwrapper mag uitsluitend bij echte tabellen horizontaal scrollen; de pagina zelf nooit. De wrapper is focusbaar en heeft een toegankelijke naam.
+- Formulieren: zichtbare labels, consistente inputhoogte 36px op desktop en minimaal 44px op touchschermen. Twee of drie kolommen alleen bij voldoende ruimte; mobiel één kolom. Checkboxlabels blijven klikbaar. Hulpuitleg alleen waar nodig voor juist invullen.
+- Tabs/filters: neutrale underline-/borderselectie, bestaande GET-filters behouden. Geen zoekveld toevoegen zonder zoekfunctionaliteit. Inputwaarden en bestaande formulieracties blijven behouden.
+- `Notice`: `role=alert` voor fouten, `role=status` voor resultaat. Kleur wordt altijd ondersteund door tekst. Geen automatische verdwijning van foutmeldingen.
+- Empty states: één korte tekst en uitsluitend een bruikbare actie; geen illustraties.
+- Loading: vaste compacte skeletonregels en status ‘Pagina laden…’. Alleen functionele spinneranimatie; `prefers-reduced-motion` schakelt animatie uit.
+- Huisstijl: color picker en HEX-invoer delen één waarde, alleen `#RRGGBB` is geldig. Preview gebruikt dezelfde tokens als de applicatie. Wijzigingen zijn lokaal tot Opslaan. Standaardkleuren herstellen zet de invoer terug; daarna expliciet opslaan. De server en database controleren invoer én beheerrechten.
+
+## Responsive en toegankelijkheid
+
+Breakpoints: desktop >1024px; tablet 769–1024px; mobiel ≤768px. Sidebar is op mobiel een expliciet te openen menu, geen reeks onbenoemde iconen. Formulieren schakelen op 768px naar één kolom, lijsten stapelen. Op 1024px verdwijnt de derde formulierkolom. Touchbediening is minimaal 44px hoog.
+
+Gebruik zichtbare focus (2px met 2px offset), niet uitsluitend kleur voor status, toetsenbordbediening en correcte labels. Bodytekst haalt minimaal WCAG AA 4,5:1. Berekende kleurvoorgronden zijn getest met donkere, lichte en verzadigde invoer; merkvlakken met zwart/witcontrast ondersteunen ook een witte of zwarte clubkleur. De focusring gebruikt een contrasterend afgeleid token in plaats van de onbewerkte clubkleur. Sla alleen gevalideerde HEX-waarden op, nooit willekeurige CSS.
+
+## Do's en don'ts
+
+Wel: ‘Diensten’, een compacte filterbalk en een lijst met echte diensten. Niet: een hero ‘Samen maken we de club’ met decoratieve illustratie.
+
+Wel: ‘Geen leden gevonden.’ Niet: fictieve leden om een lege rapportage te vullen.
+
+Wel: neutrale typebadge ‘Bardienst’, tekststatus ‘Ingepland’. Niet: voor elk type een willekeurige badgekleur of emoji.
+
+Wel: één dunne border rond een samenhangend formulier. Niet: grote afgeronde kaarten voor elk invoerveld.
+
+Wel: nieuwe UI met bestaande tokens, gedeelde componenten en bijgewerkte documentatie. Niet: een losse nieuwe stijl, fontdependency of set hardcoded clubkleuren.
+
+## Verificatie
+
+`npm run build` controleert productiebuild en TypeScript. `npm test` omvat de bestaande businessregels plus merkcontrast/validatie en de echte huisstijlmigratie met RLS/autorisatie. `npm run test:browser` gebruikt uitsluitend een lokale testbackend en controleert navigatie, authenticatie/herstel, formulieren, huisstijlpreview/opslag/herladen, mobiele menu-interactie en responsive overflow. Testfixtures komen niet in de productie-app. Productieopslag vereist dat migratie `002_club_branding.sql` is toegepast; zonder migratie blijft de app met standaardkleuren bruikbaar en is opslaan in Huisstijl niet beschikbaar.
