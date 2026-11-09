@@ -19,7 +19,9 @@ const seasonStamp=()=>new Date(Date.UTC(2026,10,9,13,0,++seasonVersion)).toISOSt
 const teamId='30000000-0000-4000-8000-000000000001';
 let testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
-let hideTestEnrollment=false;
+let hideTestEnrollment=false,captainA=false;
+let extraDuties=[],extraEnrollments=[];
+const teamAssignments=new Map();
 let adminRole='admin';
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
@@ -106,6 +108,11 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/create_automatic_match_duty') {
   const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:input.p_points}];return res.end(JSON.stringify(testDuty.id));
  }
+ if(url.pathname==='/rest/v1/rpc/enroll') {
+  const input=JSON.parse(body);
+  if(extraDuties.some(d=>d.id===input.p_duty)) extraEnrollments.push({id:'86000000-0000-4000-8000-000000000099',member_id:input.p_member ?? memberA,duty_id:input.p_duty,created_at:new Date().toISOString(),revoked:false,offered:false});
+  return res.end('null');
+ }
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
   const input=JSON.parse(body);brand={primary_color:input.p_primary,secondary_color:input.p_secondary};return res.end('null');
@@ -148,11 +155,15 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
-   result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamId,captain:false,norm_override:null}));
+   result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamAssignments.get(member_id) ?? teamId,captain:member_id===memberA&&captainA,norm_override:null}));
  }
- if(url.pathname==='/rest/v1/duties') result=[testDuty];
- if(url.pathname==='/rest/v1/enrollments' && !hideTestEnrollment && (!url.searchParams.get('member_id') || url.searchParams.get('member_id')==='eq.'+memberA)) result=[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}];
- if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]}];
+ if(url.pathname==='/rest/v1/duties') result=[testDuty,...extraDuties];
+ if(url.pathname==='/rest/v1/enrollments') {
+  const member=url.searchParams.get('member_id')?.replace('eq.','');
+  const ownBase=!hideTestEnrollment?[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}]:[];
+  result=[...ownBase,...extraEnrollments].filter(e=>!member||e.member_id===member);
+ }
+ if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
   result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):url.searchParams.has('id')?[profile(id)]:[profile(memberA),profile(memberB),profile(admin)];
@@ -226,12 +237,46 @@ try {
  await page.locator('button[aria-busy=true]').waitFor({timeout:1000});
  assert.equal(await page.getByRole('button',{name:/Inloggen/}).isDisabled(),true);
  await page.waitForURL(base+'/');await page.getByText('Anna Test',{exact:true}).first().waitFor();
+ // A member gets only own information; completed services remain accessible.
+ assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link').allTextContents(),['Mijn overzicht','Open diensten','Mijn diensten','Mijn profiel']);
+ const pastId='50000000-0000-4000-8000-000000000002',foreignId='50000000-0000-4000-8000-000000000003';
+ extraDuties=[{...testDuty,id:pastId,title:'Eigen afgelopen testdienst',starts_at:new Date(Date.now()-3*86400000).toISOString(),ends_at:new Date(Date.now()-3*86400000+7200000).toISOString(),points:3},{...testDuty,id:foreignId,title:'Dienst van ander lid',starts_at:new Date(Date.now()-4*86400000).toISOString(),ends_at:new Date(Date.now()-4*86400000+7200000).toISOString()}];
+ extraEnrollments=[{id:'86000000-0000-4000-8000-000000000002',member_id:memberA,duty_id:pastId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false},{id:'86000000-0000-4000-8000-000000000003',member_id:memberB,duty_id:foreignId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false}];
+ await page.goto(base+'/mijn-diensten?view=history&member='+memberB);
+ await page.getByRole('heading',{name:'Eigen afgelopen testdienst',exact:true}).waitFor();
+ assert.equal(await page.getByRole('heading',{name:'Dienst van ander lid',exact:true}).count(),0);
+ await page.getByRole('link',{name:'Komend',exact:true}).click();await page.getByRole('heading',{name:'Testdienst',exact:true}).waitFor();
+ await page.goto(base+'/profiel?member='+memberB);
+ await page.getByRole('heading',{name:'Mijn profiel',exact:true}).waitFor();await page.getByText('anna@example.test',{exact:true}).waitFor();
+ assert.equal(await page.getByText('bram@example.test',{exact:true}).count(),0);
+ assert.equal(await page.locator('input[name=qualification],input[name=role],input[name=norm]').count(),0);
+ await page.goto(base+'/team');await page.waitForURL(base+'/');
+ // A captain sees only their own team and only eligible, free own-team members.
+ const reservedId='50000000-0000-4000-8000-000000000004',otherTeam='30000000-0000-4000-8000-000000000002';
+ captainA=true;teamAssignments.set(admin,otherTeam);
+ testTeams=[{id:teamId,name:'Eigen testteam',age_class:'senior',competition_level:null},{id:otherTeam,name:'Ander testteam',age_class:'senior',competition_level:null}];
+ extraDuties=[{...testDuty,id:reservedId,title:'Eigen teamfluitdienst',assigned_team_id:teamId,kind:'referee',required_qualification:'R1',required_level:5,capacity:1,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()},{...testDuty,id:foreignId,title:'Dienst van ander team',assigned_team_id:otherTeam}];extraEnrollments=[];
+ await page.goto(base+'/team');await page.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ assert.equal(await page.getByRole('heading',{name:'Ander testteam',exact:true}).count(),0);
+ assert.equal(await page.getByRole('heading',{name:'Dienst van ander team',exact:true}).count(),0);
+ assert.equal(await page.getByRole('region',{name:'Teampunten'}).getByText('Alex Test',{exact:true}).count(),0);
+ const assign=page.getByRole('button',{name:'Toewijzen',exact:true}).locator('xpath=ancestor::form');
+ assert.deepEqual(await assign.getByLabel('Teamlid toewijzen').locator('option').allTextContents(),['Kies een teamlid','Bram Test']);
+ await assign.getByLabel('Teamlid toewijzen').selectOption(memberB);await assign.getByRole('button',{name:'Toewijzen',exact:true}).click();
+ await page.waitForURL(url=>url.pathname==='/team'&&url.searchParams.has('success'));
+ await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).at(-1).body.p_member,memberB);
+ await page.getByText('Geen openstaande teamdiensten.',{exact:true}).waitFor();
+ captainA=false;teamAssignments.clear();testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];extraDuties=[];extraEnrollments=[];
+ await page.goto(base+'/');await page.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
+ console.log('Ledenomgeving geslaagd: vier menuonderdelen, eigen profiel en historie, geen andermans diensten, alleen eigen aanvoerdersteam en bevoegde teamleden toewijzen. Alleen lokale testgegevens.');
  // Hold the actual navigation response to verify feedback before it arrives.
  let release;const gate=new Promise(resolve=>{release=resolve;});
- await page.route('**/wedstrijden?*',async route=>{await gate;await route.continue();});
- await page.getByRole('link',{name:'Wedstrijden',exact:true}).click();
+ await page.route('**/diensten?*',async route=>{await gate;await route.continue();});
+ await page.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link',{name:'Open diensten',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
- release();await page.waitForURL('**/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
+ release();await page.waitForURL('**/diensten');await page.getByRole('heading',{name:'Open diensten',exact:true}).waitFor();
+ await page.goto(base+'/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
  // Combine all four match filters as a member, including an away match,
  // repeated venue names and a UTC timestamp belonging to the next Dutch day.
  const selectedTeam="Testclub/Keistad DS 1 & Sponsor '26",selectedDay='2090-06-02';
@@ -409,7 +454,7 @@ try {
  await adminPage.getByRole('status').filter({hasText:'Als er een account'}).waitFor();
  assert.equal(authWrites.filter(r=>r.path.endsWith('/recover')).length,2);
  await adminPage.goto(base+'/auth/confirm#access_token='+encodeURIComponent(token(admin))+'&refresh_token=local-test-refresh&type=recovery');
- await adminPage.waitForURL('**/?password=1');
+ await adminPage.waitForURL('**/profiel?password=1');
  await adminPage.getByRole('heading',{name:'Wachtwoord instellen',exact:true}).waitFor();
  assert.equal(new URL(adminPage.url()).hash,'');
  const newPassword=' local-test-password-with-spaces ';
@@ -424,7 +469,7 @@ try {
  await adminPage.getByRole('button',{name:'Inloggen'}).click();
  await adminPage.waitForURL(base+'/');await adminPage.getByText('Alex Test',{exact:true}).first().waitFor();
  await adminPage.goto(base+'/auth/confirm?token_hash=local-test-recovery&type=recovery');
- await adminPage.waitForURL('**/?password=1');await adminPage.getByRole('heading',{name:'Wachtwoord instellen',exact:true}).waitFor();
+ await adminPage.waitForURL('**/profiel?password=1');await adminPage.getByRole('heading',{name:'Wachtwoord instellen',exact:true}).waitFor();
  await adminPage.goto(base+'/beheer/instellingen/huisstijl');
  await adminPage.getByRole('heading',{name:'Huisstijl',exact:true}).waitFor();
  await adminPage.getByLabel('Primaire kleur',{exact:true}).fill('#FFFFFF');
@@ -505,8 +550,8 @@ try {
  // The member view compares the new codes rather than old numbers.
  hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
  await page.goto(base+'/diensten');
- await page.getByText('Scheidsrechtersniveau N3 vereist',{exact:true}).waitFor();
- assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
+ await page.getByText('Er zijn nu geen passende open diensten.',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).count(),0);
  await adminPage.goto(base+'/beheer/planning');
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
  await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
@@ -604,10 +649,10 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
@@ -616,7 +661,7 @@ try {
  await adminPage.keyboard.press('Escape');
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
  await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();
- await adminPage.getByRole('link',{name:'Diensten',exact:true}).click();
+ await adminPage.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link',{name:'Open diensten',exact:true}).click();
  await adminPage.waitForURL('**/diensten');
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
  await adminPage.setViewportSize({width:390,height:600});

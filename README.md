@@ -260,4 +260,13 @@ Admin en beheerder gebruiken de schakelaar **Beheermodus** linksonder om naar he
 | Seizoenen | Aanmaken, bewerken en activeren van seizoenen |
 | Instellingen | Huisstijl en toegang tot wedstrijd-/seizoensinstellingen |
 
-De beheerpagina's staan onder `/beheer`. De ledenomgeving houdt `/`, `/diensten`, `/team`, `/wedstrijden` en `/meldingen`. Het ledenprogramma toont ook voor beheerders geen beheeracties; deze staan in `/beheer/wedstrijden`. Het oude `/wedstrijden/log` blijft bruikbaar als verwijzing naar het beveiligde beheerlog. Formulieren blijven na opslaan in hun beheeronderdeel; lidinstellingen houden de geselecteerde persoon vast. De bestaande rollen, SQL/RLS-controles, punten en fluitregels wijzigen niet. Hiervoor is geen nieuwe databasemigratie nodig.
+De beheerpagina's staan onder `/beheer`. Het ledenmenu gebruikt `/`, `/diensten`, `/mijn-diensten` en `/profiel`, met `/team` uitsluitend voor aanvoerders. Meldingen zijn bereikbaar via de topbar; directe links naar het wedstrijdprogramma blijven bruikbaar. Het ledenprogramma toont ook voor beheerders geen beheeracties; deze staan in `/beheer/wedstrijden`. Het oude `/wedstrijden/log` blijft bruikbaar als verwijzing naar het beveiligde beheerlog. Formulieren blijven na opslaan in hun beheeronderdeel; lidinstellingen houden de geselecteerde persoon vast. De bestaande rollen, SQL/RLS-controles, punten en fluitregels wijzigen niet. Hiervoor is geen nieuwe databasemigratie nodig.
+
+
+## Leden en aanvoerders
+
+Leden gebruiken een compact menu: **Mijn overzicht**, **Open diensten**, **Mijn diensten** en **Mijn profiel**. De startpagina toont de eigen puntenstand, komende eigen diensten en passende open diensten. De dienstkeuze houdt rekening met teamreserveringen, bevoegdheid, bestaande inschrijvingen, overlap en vrije plaatsen/overname. De bestaande backendcontroles blijven doorslaggevend.
+
+Mijn diensten heeft een komende planning en een afgelopen overzicht voor het actieve seizoen. Dit bevat uitsluitend eigen inschrijvingen; een opgegeven lid-ID in de URL verandert de identiteit niet. Geannuleerde en ingetrokken inschrijvingen blijven zichtbaar met nul punten. Mijn profiel toont uitsluitend de eigen gegevens en norm; leden kunnen hun diploma, rol of puntennorm daar niet verhogen. De bestaande wachtwoordinstelling na uitnodiging of herstel opent via het profiel. Het oude `/diensten?view=mine` verwijst door naar Mijn diensten.
+
+Een aanvoerder krijgt **Mijn team** voor de stand van het eigen team en het verdelen van aan dat team toegewezen diensten. Alleen beschikbare, bevoegde eigen teamleden kunnen worden gekozen. Na toewijzen blijft het scherm op Mijn team. Een beheerrol op zichzelf geeft geen extra teams in deze ledenweergave; uitgebreid teambeheer blijft beschikbaar in Beheermodus. De database beschermt ook tegen een handmatig aangepast lid- of dienst-ID. Hiervoor is geen nieuwe databasemigratie nodig.

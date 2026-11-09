@@ -48,3 +48,27 @@ test('database: echte migratie, RLS, inschrijven, 24 uur, overname en correctie'
  assert.equal((await db.query<{points:string}>("select points from duties where title='Winterreeks'")).rows[0].points,'2.00');
  } finally {await db.close();}
 });
+
+test('aanvoerder leest alleen het eigen team en wijst uitsluitend eigen teamdiensten aan eigen leden toe',async()=>{
+ const db=new PGlite();
+ try {
+  await db.exec(`create role anon;create role authenticated;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+  await db.exec(await readFile(new URL('../supabase/migrations/001_initial.sql',import.meta.url),'utf8'));
+  for(const id of [ids.a,ids.b,ids.c]) await db.query('insert into auth.users(id,email) values($1,$2)',[id,id+'@example.test']);
+  await db.query("insert into seasons(id,name,starts_on,ends_on,default_norm,active) values($1,'Testseizoen',current_date,current_date+365,20,true)",[ids.s]);
+  const other='30000000-0000-4000-8000-000000000002';
+  await db.query("insert into teams(id,season_id,name,age_class) values($1,$3,'Eigen testteam','senior'),($2,$3,'Ander testteam','senior')",[ids.t,other,ids.s]);
+  await db.query('insert into memberships(member_id,season_id,team_id,captain) values($1,$4,$5,true),($2,$4,$5,false),($3,$4,$6,false)',[ids.a,ids.b,ids.c,ids.s,ids.t,other]);
+  const ownDuty=(await db.query<{id:string}>("insert into duties(season_id,title,kind,starts_at,ends_at,location,points,capacity,assigned_team_id) values($1,'Teamdienst','bar',now()+interval '10 days',now()+interval '10 days 2 hours','Testhal',2,3,$2) returning id",[ids.s,ids.t])).rows[0].id;
+  const foreignDuty=(await db.query<{id:string}>("insert into duties(season_id,title,kind,starts_at,ends_at,location,points,capacity,assigned_team_id) values($1,'Andere teamdienst','bar',now()+interval '20 days',now()+interval '20 days 2 hours','Testhal',2,3,$2) returning id",[ids.s,other])).rows[0].id;
+  const as=async(id:string)=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id]);await db.exec('set role authenticated');};
+  await as(ids.a);
+  assert.deepEqual((await db.query<{id:string}>('select id from profiles order by id')).rows.map(p=>p.id),[ids.a,ids.b]);
+  assert.equal((await db.query('select * from memberships where team_id=$1',[other])).rows.length,0);
+  await db.query('select enroll($1,$2)',[ownDuty,ids.b]);
+  assert.equal((await db.query('select * from enrollments where member_id=$1 and not revoked',[ids.b])).rows.length,1);
+  await assert.rejects(db.query('select enroll($1,$2)',[ownDuty,ids.c]),/niet toewijzen/);
+  await assert.rejects(db.query('select enroll($1,$2)',[foreignDuty,ids.b]),/niet toewijzen/);
+  await as(ids.b);await assert.rejects(db.query('select enroll($1,$2)',[ownDuty,ids.a]),/niet toewijzen/);
+ } finally {await db.close();}
+});

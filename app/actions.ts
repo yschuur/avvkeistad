@@ -18,6 +18,7 @@ const id = z.uuid();
 const number = (v: FormDataEntryValue | null) => Number(v);
 const optionalNumber = (v: FormDataEntryValue | null) => v === '' || v === null ? null : Number(v);
 const text = (f: FormData, k: string) => String(f.get(k) ?? '').trim();
+const dutyReturnPath=(f:FormData)=>{const path=text(f,'return_to');return ['/beheer/planning','/mijn-diensten','/team'].includes(path)?path:'/diensten';};
 const manager = async () => {
   const db = await supabase();
   const { data: { user } } = await db.auth.getUser();
@@ -61,14 +62,14 @@ export async function setPassword(f: FormData) {
   });
 }
 export async function enroll(f: FormData) {
-  await run(text(f,'return_to')==='/beheer/planning'?'/beheer/planning':'/diensten', async () => {
+  await run(dutyReturnPath(f), async () => {
     const db = await supabase();
     const { error } = await db.rpc('enroll', { p_duty: id.parse(f.get('duty_id')), p_takeover: f.get('takeover_id') ? id.parse(f.get('takeover_id')) : null, p_member: f.get('member_id') ? id.parse(f.get('member_id')) : null });
     if (error) throw new Error(error.message);
   });
 }
 export async function changeEnrollment(f: FormData) {
-  await run(text(f,'return_to')==='/beheer/planning'?'/beheer/planning':'/diensten', async () => {
+  await run(dutyReturnPath(f), async () => {
     const db = await supabase();
     const { error } = await db.rpc('change_enrollment', { p_enrollment: id.parse(f.get('enrollment_id')), p_action: z.enum(['withdraw','offer','unoffer','revoke']).parse(f.get('action')), p_reason: text(f, 'reason') || null });
     if (error) throw new Error(error.message);

@@ -5,7 +5,7 @@ export type Duty = {
   location: string; required_level: number; assigned_team_id: string | null;
   required_qualification?:string|null;cancelled: boolean; signup_closed?:boolean;credit_blocked?:boolean;match_id?:string|null;
 };
-export type Enrollment = { id: string; duty_id: string; member_id: string; created_at: string; offered: boolean; revoked: boolean };
+export type Enrollment = { id: string; duty_id: string; member_id: string; created_at: string; offered: boolean; revoked: boolean; revoked_reason?:string|null };
 export type Profile = { id: string; first_name: string; last_name: string; email: string; role: Role; referee_level: number; referee_qualification?:string|null; nevobo_code: string | null };
 export function canWithdraw(joinedAt: string, startsAt: string, now = new Date()) {
   const elapsed = now.getTime() - new Date(joinedAt).getTime();
