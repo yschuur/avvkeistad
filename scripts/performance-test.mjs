@@ -12,6 +12,9 @@ const {privateKey,publicKey}=generateKeyPairSync('ec',{namedCurve:'prime256v1'})
 const jwk={...publicKey.export({format:'jwk'}),kid:'local-performance-test',alg:'ES256',use:'sig'};
 const memberA='10000000-0000-4000-8000-000000000001', memberB='10000000-0000-4000-8000-000000000002', admin='10000000-0000-4000-8000-000000000003';
 const season='20000000-0000-4000-8000-000000000001';
+const initialSeason={id:season,name:'Testseizoen',active:true,default_norm:20,youth_norm:12,senior_norm:20,starts_on:'2026-01-01',ends_on:'2027-12-31',updated_at:'2026-11-09T12:00:00.000Z'};
+let testSeasons=[{...initialSeason}],seasonSaveFailure=false,seasonMigrationMissing=false,seasonVersion=0;
+const seasonStamp=()=>new Date(Date.UTC(2026,10,9,13,0,++seasonVersion)).toISOString();
 // All records below are isolated test fixtures. They are never imported by the app.
 const teamId='30000000-0000-4000-8000-000000000001';
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
@@ -65,6 +68,18 @@ const mock=createServer(async(req,res)=>{
   additionalNotifications.push(row);return res.end(JSON.stringify(row));
  }
  if(url.pathname==='/rest/v1/rpc/mark_notification_read') {testNotification.read_at=new Date().toISOString();return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/save_season') {
+  const input=JSON.parse(body);
+  if(seasonSaveFailure) {res.statusCode=400;return res.end(JSON.stringify({code:'P0001',message:'Er bestaat al een seizoen met deze naam.'}));}
+  const existing=testSeasons.find(s=>s.id===input.p_season);
+  if(existing && existing.updated_at!==input.p_expected_updated_at) {res.statusCode=400;return res.end(JSON.stringify({code:'P0001',message:'Dit seizoen is intussen gewijzigd. Herlaad de pagina voordat je opnieuw opslaat.'}));}
+  const saved={id:existing?.id ?? '20000000-0000-4000-8000-000000000002',name:input.p_name,starts_on:input.p_start,ends_on:input.p_end,default_norm:input.p_norm,youth_norm:input.p_youth,senior_norm:input.p_senior,active:existing?.active ?? !testSeasons.some(s=>s.active),updated_at:seasonStamp()};
+  if(existing) Object.assign(existing,saved);else testSeasons.push(saved);
+  return res.end(JSON.stringify(saved.id));
+ }
+ if(url.pathname==='/rest/v1/rpc/activate_season') {
+  const input=JSON.parse(body);for(const s of testSeasons) {s.active=s.id===input.p_season;s.updated_at=seasonStamp();}return res.end('null');
+ }
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
   const input=JSON.parse(body);brand={primary_color:input.p_primary,secondary_color:input.p_secondary};return res.end('null');
@@ -106,7 +121,10 @@ const mock=createServer(async(req,res)=>{
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
   result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):[profile(id)];
  }
- if(url.pathname==='/rest/v1/seasons') result=[{id:season,name:'Testseizoen',active:true,default_norm:20,youth_norm:12,senior_norm:20,starts_on:'2026-01-01',ends_on:'2027-12-31'}];
+ if(url.pathname==='/rest/v1/seasons') {
+  if(seasonMigrationMissing && url.searchParams.get('select')?.includes('updated_at')) {res.statusCode=400;return res.end(JSON.stringify({code:'42703',message:'column seasons.updated_at does not exist'}));}
+  result=testSeasons.filter(s=>url.searchParams.get('active')!=='eq.true'||s.active).toSorted((a,b)=>b.starts_on.localeCompare(a.starts_on));
+ }
  res.end(JSON.stringify(result));
 });
 mock.listen(0,'127.0.0.1');await once(mock,'listening');mockUrl=`http://127.0.0.1:${mock.address().port}`;
@@ -202,6 +220,70 @@ try {
  await adminPage.waitForURL(base+'/');await adminPage.getByText('Alex Test',{exact:true}).first().waitFor();
  await adminPage.getByRole('link',{name:'Beheer',exact:true}).click();
  await adminPage.getByRole('heading',{name:'Beheer',exact:true}).waitFor();
+ // Season creation/editing must have separate identities and keep unsaved input
+ // on a server rejection; activation is explicit and cancellable.
+ await adminPage.getByRole('link',{name:'Seizoenen',exact:true}).click();
+ await adminPage.getByRole('heading',{name:'Seizoenen',exact:true}).waitFor();
+ await adminPage.getByLabel('Seizoensnaam',{exact:true}).fill('Testseizoen bewerkt');
+ await adminPage.getByLabel('Begindatum',{exact:true}).fill('2026-01-02');
+ await adminPage.getByLabel('Einddatum',{exact:true}).fill('2025-12-31');
+ await adminPage.getByRole('button',{name:'Wijzigingen opslaan'}).click();
+ await adminPage.getByRole('alert').filter({hasText:'Controleer de gemarkeerde velden'}).waitFor();
+ assert.equal(await adminPage.getByLabel('Einddatum',{exact:true}).getAttribute('aria-invalid'),'true');
+ assert.equal(await adminPage.getByLabel('Einddatum',{exact:true}).evaluate(el=>el===document.activeElement),true);
+ assert.equal(await adminPage.getByLabel('Seizoensnaam',{exact:true}).inputValue(),'Testseizoen bewerkt');
+ await adminPage.getByLabel('Einddatum',{exact:true}).fill('2027-12-30');
+ await adminPage.getByLabel('Algemene puntennorm',{exact:true}).fill('24');
+ await adminPage.getByLabel('Puntennorm jeugd',{exact:true}).fill('');
+ await adminPage.getByLabel('Puntennorm senioren',{exact:true}).fill('0');
+ seasonSaveFailure=true;
+ await adminPage.getByRole('button',{name:'Wijzigingen opslaan'}).click();
+ await adminPage.getByRole('alert').filter({hasText:'Er bestaat al een seizoen'}).waitFor();
+ assert.equal(await adminPage.getByLabel('Seizoensnaam',{exact:true}).inputValue(),'Testseizoen bewerkt');
+ seasonSaveFailure=false;
+ await adminPage.getByRole('button',{name:'Wijzigingen opslaan'}).click();
+ await adminPage.getByRole('status').filter({hasText:'Seizoen bijgewerkt.'}).waitFor();
+ assert.equal(testSeasons.length,1);assert.equal(testSeasons[0].id,season);assert.equal(testSeasons[0].name,'Testseizoen bewerkt');
+ assert.equal(testSeasons[0].starts_on,'2026-01-02');assert.equal(testSeasons[0].ends_on,'2027-12-30');
+ assert.equal(testSeasons[0].youth_norm,null);assert.equal(testSeasons[0].senior_norm,0);
+ await adminPage.reload();assert.equal(await adminPage.getByLabel('Seizoensnaam',{exact:true}).inputValue(),'Testseizoen bewerkt');
+ await adminPage.getByRole('link',{name:'Nieuw seizoen',exact:true}).click();
+ await adminPage.getByRole('heading',{name:'Nieuw seizoen aanmaken',exact:true}).waitFor();
+ assert.equal(await adminPage.getByLabel('Begindatum',{exact:true}).inputValue(),'2027-01-02');
+ assert.equal(await adminPage.getByLabel('Algemene puntennorm',{exact:true}).inputValue(),'24');
+ await adminPage.getByLabel('Seizoensnaam',{exact:true}).fill('2028/2029');
+ await adminPage.getByLabel('Begindatum',{exact:true}).fill('2028-08-01');
+ await adminPage.getByLabel('Einddatum',{exact:true}).fill('2029-07-31');
+ await adminPage.getByRole('button',{name:'Seizoen aanmaken',exact:true}).click();
+ await adminPage.getByRole('status').filter({hasText:'Seizoen aangemaakt.'}).waitFor();
+ assert.equal(testSeasons.length,2);assert.equal(testSeasons[0].active,true);assert.equal(testSeasons[1].active,false);
+ const nextSeasonRow=adminPage.getByRole('row').filter({hasText:'2028/2029'});
+ await nextSeasonRow.getByRole('button',{name:'Activeren',exact:true}).click();
+ const activationDialog=adminPage.getByRole('dialog',{name:'Actie bevestigen'});
+ await activationDialog.waitFor();await activationDialog.getByRole('button',{name:'Annuleren',exact:true}).click();
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/activate_season')).length,0);
+ await nextSeasonRow.getByRole('button',{name:'Activeren',exact:true}).click();
+ await activationDialog.getByRole('button',{name:'Bevestigen',exact:true}).click();
+ await adminPage.getByRole('status').filter({hasText:'Actief seizoen gewijzigd.'}).waitFor();
+ assert.equal(testSeasons[0].active,false);assert.equal(testSeasons[1].active,true);
+ assert.equal(await adminPage.locator('.season-label').innerText(),'2028/2029');
+ // First use needs no invented club calendar; its first season becomes active.
+ testSeasons=[];await adminPage.goto(base+'/beheer/seizoenen?new=1');
+ assert.equal(await adminPage.getByLabel('Algemene puntennorm',{exact:true}).inputValue(),'');
+ await adminPage.getByLabel('Seizoensnaam',{exact:true}).fill('Eerste testseizoen');
+ await adminPage.getByLabel('Begindatum',{exact:true}).fill('2026-08-01');
+ await adminPage.getByLabel('Einddatum',{exact:true}).fill('2027-07-31');
+ await adminPage.getByLabel('Algemene puntennorm',{exact:true}).fill('20');
+ await adminPage.getByRole('button',{name:'Seizoen aanmaken',exact:true}).click();
+ await adminPage.getByRole('status').filter({hasText:'Seizoen aangemaakt.'}).waitFor();assert.equal(testSeasons[0].active,true);
+ testSeasons=[{...initialSeason}];seasonMigrationMissing=true;
+ await adminPage.goto(base+'/beheer/seizoenen');
+ await adminPage.getByRole('alert').filter({hasText:'004_season_management.sql'}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Wijzigingen opslaan'}).count(),0);
+ seasonMigrationMissing=false;
+ await page.goto(base+'/beheer/seizoenen');await page.waitForURL(base+'/');
+ assert.equal(await page.getByRole('heading',{name:'Seizoenen',exact:true}).count(),0);
+ console.log('Seizoenenbeheer geslaagd: eerste/volgende aanmaken, voorstel, naam/periode/normen opslaan, invoerbehoud en veldfocus bij fouten, expliciete activatie/annulering, ledenafscherming en ontbrekende migratie. Alleen lokale testgegevens.');
  await adminPage.goto(base+'/wachtwoord-vergeten');
  await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
  await adminPage.getByRole('button',{name:'Herstelmail aanvragen'}).click();
@@ -305,10 +387,10 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/team','/wedstrijden','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/beheer','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');

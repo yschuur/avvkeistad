@@ -3,6 +3,7 @@ import { cache } from 'react';
 import { collectPages } from './pagination';
 import { configured, supabase } from './supabase/server';
 import { progress, type Duty, type Profile, type Enrollment } from './domain';
+import type { Season } from './seasons';
 export type Membership = { member_id: string; team_id: string; captain: boolean; norm_override: number | null };
 export type Team = { id: string; name: string; age_class: string };
 export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;postal_code?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number}[] };
@@ -59,7 +60,6 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
     memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[] }[], functions: results[8].data as {title:string;points:number}[], unreadNotifications:results[9].error?null:(results[9] as {count?:number|null}).count ?? null, syncState:results[10].error?null:(results[10].data?.[0] as SyncState|undefined) ?? null };
 });
 
-type Season = { id: string; name: string; default_norm: number; youth_norm: number | null; senior_norm: number | null; starts_on: string; ends_on: string };
 export type AppData = Awaited<ReturnType<typeof getData>>;
 export function memberProgress(data: AppData, memberId: string) {
   const membership = data.memberships.find(m => m.member_id === memberId);

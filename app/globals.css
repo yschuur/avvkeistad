@@ -292,3 +292,16 @@ input[type=color] { width: 44px; height: 36px; flex-shrink: 0; padding: var(--sp
 @media (max-width: 768px) { .notification-row { grid-template-columns: 1fr; gap: var(--space-3); } .notification-meta { align-items: flex-start; } .match-detail summary { min-height: 44px; } }
 
 .pagination { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: var(--space-4); margin-top: var(--space-4); font-size: 12px; color: var(--text-muted); }
+
+/* Season management uses the shared compact panels, forms and table. */
+.season-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.season-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.season-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.season-row-current { background: var(--surface-subtle); }
+.season-summary { display: flex; flex-wrap: wrap; gap: var(--space-5); margin: var(--space-4) 0; }
+.season-summary dt { color: var(--text-muted); font-size: 12px; }
+.season-summary dd { margin: var(--space-1) 0 0; font-variant-numeric: tabular-nums; }
+.field-error { color: var(--danger); font-size: 12px; }
+input[aria-invalid=true] { border-color: var(--danger); }
+#seizoenformulier { scroll-margin-top: var(--space-5); }
+@media (max-width: 1024px) { .season-layout { grid-template-columns: minmax(0, 1fr); } }

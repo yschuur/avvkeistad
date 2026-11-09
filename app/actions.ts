@@ -10,6 +10,7 @@ import { serviceClient,synchronizeMatches } from '@/lib/nevobo/service';
 import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
 import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
 import { loginError } from '@/lib/auth-errors';
+import { seasonSchema, type SeasonValues, type SeasonFormState } from '@/lib/seasons';
 
 const id = z.uuid();
 const number = (v: FormDataEntryValue | null) => Number(v);
@@ -87,13 +88,37 @@ export async function createDuty(f: FormData) {
     if (error) throw new Error(error.message);
   });
 }
-export async function setupSeason(f: FormData) {
-  await run('/beheer', async () => {
-    const { db } = await manager();
-    const positive = z.number().min(0);
-    const { error } = await db.rpc('setup_season', { p_name: z.string().min(1).parse(text(f, 'name')), p_start: text(f, 'start'), p_end: text(f, 'end'), p_norm: positive.parse(number(f.get('norm'))), p_youth: positive.nullable().parse(optionalNumber(f.get('youth'))), p_senior: positive.nullable().parse(optionalNumber(f.get('senior'))) });
-    if (error) throw new Error(error.message);
-  });
+export async function saveSeason(_previous:SeasonFormState,f:FormData):Promise<SeasonFormState> {
+  const parsed=seasonSchema.safeParse(Object.fromEntries(['name','start','end','norm','youth','senior'].map(key=>[key,text(f,key)])));
+  if(!parsed.success) {
+    const errors:SeasonFormState['errors']={};
+    for(const issue of parsed.error.issues) {const key=issue.path[0] as keyof SeasonValues;if(!errors[key]) errors[key]=issue.message;}
+    return {error:'Controleer de gemarkeerde velden. Je invoer is bewaard.',errors};
+  }
+  let saved:string;
+  const editing=Boolean(f.get('season_id'));
+  try {
+    const {db}=await manager(),v=parsed.data;
+    const {data,error}=await db.rpc('save_season',{
+      p_season:editing?id.parse(f.get('season_id')):null,p_name:v.name,p_start:v.start,p_end:v.end,
+      p_norm:v.norm,p_youth:v.youth,p_senior:v.senior,
+      p_expected_updated_at:editing?z.iso.datetime({offset:true}).parse(f.get('updated_at')):null,
+    });
+    if(error) return {error:error.code==='PGRST202'?'Seizoenen opslaan is nog niet beschikbaar. Voer migratie 004_season_management.sql uit in Supabase.':error.message};
+    saved=id.parse(data);
+  }catch(error){return {error:error instanceof z.ZodError?'De opgeslagen versie van dit seizoen ontbreekt. Herlaad de pagina.':error instanceof Error?error.message:'Opslaan is niet gelukt. Je invoer is bewaard.'};}
+  revalidatePath('/','layout');
+  redirect('/beheer/seizoenen?season='+saved+'&success='+encodeURIComponent(editing?'Seizoen bijgewerkt.':'Seizoen aangemaakt.'));
+}
+export async function activateSeason(f:FormData) {
+  let error:string|null=null;
+  try {
+    const {db}=await manager();
+    const result=await db.rpc('activate_season',{p_season:id.parse(f.get('season_id')),p_expected_updated_at:z.iso.datetime({offset:true}).parse(f.get('updated_at'))});
+    if(result.error) error=result.error.code==='PGRST202'?'Voer eerst migratie 004_season_management.sql uit in Supabase.':result.error.message;
+  }catch(e){error=e instanceof z.ZodError?'Herlaad de pagina voordat je dit seizoen activeert.':e instanceof Error?e.message:'Activeren is niet gelukt.';}
+  revalidatePath('/','layout');
+  redirect('/beheer/seizoenen?'+(error?'error='+encodeURIComponent(error):'success='+encodeURIComponent('Actief seizoen gewijzigd.')));
 }
 export async function createTeam(f: FormData) {
   await run('/beheer', async () => {
