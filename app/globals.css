@@ -305,3 +305,9 @@ input[type=color] { width: 44px; height: 36px; flex-shrink: 0; padding: var(--sp
 input[aria-invalid=true] { border-color: var(--danger); }
 #seizoenformulier { scroll-margin-top: var(--space-5); }
 @media (max-width: 1024px) { .season-layout { grid-template-columns: minmax(0, 1fr); } }
+
+.match-filters { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) auto; align-items: end; gap: var(--space-4); margin-bottom: var(--space-5); }
+.match-filter-field { display: flex; flex-direction: column; gap: var(--space-2); min-width: 0; }
+.match-filter-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+@media (max-width: 1024px) { .match-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 768px) { .match-filters { grid-template-columns: minmax(0, 1fr); } }

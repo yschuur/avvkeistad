@@ -20,6 +20,7 @@ const teamId='30000000-0000-4000-8000-000000000001';
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
+let matchFilterFixtures=null;
 const testNotification={id:'80000000-0000-4000-8000-000000000001',member_id:memberA,match_id:testMatch.id,title:'Testwedstrijd gewijzigd',body:'Nieuwe planning in de lokale testomgeving.',created_at:new Date().toISOString(),read_at:null};
 const actualProgram=await readFile(new URL('../tests/fixtures/nevobo-program.rss',import.meta.url),'utf8');
 let programXml=actualProgram,programSignature=null,activeSync=false,refAssigned=false;
@@ -107,7 +108,10 @@ const mock=createServer(async(req,res)=>{
   res.setHeader('Content-Range',result.length?`0-${result.length-1}/${result.length}`:'*/0');
  }
  if(url.pathname==='/rest/v1/nevobo_sync_state') result=[syncState];
- if(url.pathname==='/rest/v1/matches') result=[testMatch];
+ if(url.pathname==='/rest/v1/matches') {
+  const source=matchFilterFixtures ?? [testMatch],from=Number(url.searchParams.get('offset') ?? 0),limit=Number(url.searchParams.get('limit') ?? 500);
+  result=source.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${source.length}`:`*/${source.length}`);
+ }
  if(url.pathname==='/rest/v1/club_branding') result=[brand];
  if(url.pathname==='/rest/v1/teams') result=[{id:teamId,name:'Testteam',age_class:'senior'}];
  if(url.pathname==='/rest/v1/memberships') {
@@ -195,6 +199,55 @@ try {
  await page.getByRole('link',{name:'Wedstrijden',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
  release();await page.waitForURL('**/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
+ // Combine all four match filters as a member, including an away match,
+ // repeated venue names and a UTC timestamp belonging to the next Dutch day.
+ const selectedTeam="Testclub/Keistad DS 1 & Sponsor '26",selectedDay='2090-06-02';
+ const chosen={...testMatch,id:'71000000-0000-4000-8000-000000000001',home_team:'Andere testclub DS 1',away_team:selectedTeam,starts_at:'2090-06-01T22:30:00Z',location:'Testhal',city:'Teststad'};
+ matchFilterFixtures=[chosen,
+  {...chosen,id:'71000000-0000-4000-8000-000000000002',status:'cancelled'},
+  {...chosen,id:'71000000-0000-4000-8000-000000000003',city:'Andere teststad'},
+  {...chosen,id:'71000000-0000-4000-8000-000000000004',away_team:'Testclub DS 10'},
+  {...chosen,id:'71000000-0000-4000-8000-000000000005',starts_at:'2090-06-02T22:30:00Z'},
+ ];
+ await page.goto(base+'/wedstrijden?view=all');
+ const filterForm=page.getByRole('form',{name:'Wedstrijden filteren'}),rows=page.getByRole('region',{name:'Wedstrijdprogramma'}).locator('tbody tr');
+ await filterForm.getByLabel('Dag',{exact:true}).fill(selectedDay);
+ await filterForm.getByLabel('Team',{exact:true}).selectOption(selectedTeam);
+ await filterForm.getByLabel('Locatie',{exact:true}).selectOption({label:'Testhal · Teststad'});
+ await filterForm.getByLabel('Status',{exact:true}).selectOption('scheduled');
+ await filterForm.getByRole('button',{name:'Filteren',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('team')===selectedTeam && url.searchParams.get('day')===selectedDay);
+ await page.getByRole('status').filter({hasText:/^1 wedstrijd/}).waitFor();assert.equal(await rows.count(),1);
+ assert.equal(await filterForm.getByLabel('Team',{exact:true}).inputValue(),selectedTeam);
+ await page.reload();await page.getByRole('status').filter({hasText:/^1 wedstrijd/}).waitFor();
+ assert.equal(await rows.count(),1);assert.equal(await filterForm.getByLabel('Dag',{exact:true}).inputValue(),selectedDay);
+ await filterForm.getByLabel('Status',{exact:true}).selectOption('played');
+ await filterForm.getByRole('button',{name:'Filteren',exact:true}).click();
+ await page.getByText('Geen wedstrijden in deze selectie.',{exact:true}).waitFor();
+ await page.getByRole('link',{name:'Historie',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('view')==='history');
+ assert.equal(new URL(page.url()).searchParams.get('team'),selectedTeam);
+ await page.getByRole('link',{name:'Filters wissen',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('view')==='history' && !url.searchParams.has('team'));
+ await page.waitForLoadState('networkidle');
+ assert.equal(await filterForm.getByLabel('Dag',{exact:true}).inputValue(),'');
+ // Filtering happens before display pagination, including beyond row 1000.
+ matchFilterFixtures=Array.from({length:1051},(_,index)=>({...chosen,id:'local-filter-match-'+index,home_team:index<51?selectedTeam:'Ander team DS 1',away_team:index<51?'Tegenstander DS 1':selectedTeam}));
+ await page.goto(base+'/wedstrijden?'+new URLSearchParams({view:'all',day:selectedDay,team:selectedTeam,location:JSON.stringify(['Testhal','Teststad']),status:'scheduled'}));
+ await page.getByRole('status').filter({hasText:/^1051 wedstrijden/}).waitFor();assert.equal(await rows.count(),50);
+ await page.getByRole('link',{name:'Volgende',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('page')==='2');
+ await page.getByText('Pagina 2 van 22',{exact:true}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get('team'),selectedTeam);assert.equal(new URL(page.url()).searchParams.get('day'),selectedDay);
+ assert.equal(new URL(page.url()).searchParams.get('location'),JSON.stringify(['Testhal','Teststad']));assert.equal(new URL(page.url()).searchParams.get('status'),'scheduled');
+ await filterForm.getByLabel('Team',{exact:true}).selectOption('Ander team DS 1');
+ await filterForm.getByRole('button',{name:'Filteren',exact:true}).click();
+ await page.getByRole('status').filter({hasText:/^1000 wedstrijden/}).waitFor();assert.equal(new URL(page.url()).searchParams.has('page'),false);
+ assert.equal(await rows.count(),50);
+ await page.getByRole('link',{name:'Filters wissen',exact:true}).click();
+ await page.waitForURL(url=>url.searchParams.get('view')==='all' && !url.searchParams.has('team'));
+ matchFilterFixtures=null;
+ console.log('Wedstrijdfilters geslaagd: dag in Nederlandse tijd, thuis-/uitteam, locatie/plaats en status combineren, nulresultaat, bewaren/herladen, tabs, wissen en paginering over 1051 bronregels. Alleen lokale testgegevens.');
  await page.goto(base+'/meldingen');
  await page.getByRole('heading',{name:'Meldingen',exact:true}).waitFor();
  await page.getByRole('heading',{name:'Testwedstrijd gewijzigd'}).waitFor();
@@ -371,7 +424,7 @@ try {
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2030783').status,'cancelled');
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2084600').status,'missing');
  await adminPage.goto(base+'/wedstrijden?view=all');
- await adminPage.getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
+ await adminPage.getByRole('region',{name:'Wedstrijdprogramma'}).getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
  programXml=actualProgram;
  await adminPage.goto(base+'/wedstrijden?view=all');
  await adminPage.getByRole('button',{name:'Testmelding naar mij'}).click();
@@ -390,7 +443,7 @@ try {
    for(const path of ['/','/diensten','/beheer','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/wedstrijden','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');

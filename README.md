@@ -196,3 +196,9 @@ Voer op een bestaand project uitsluitend `supabase/migrations/004_season_managem
 - Als een andere beheerder hetzelfde seizoen intussen heeft aangepast, wordt opslaan/activeren geweigerd totdat je herlaadt. Gelijktijdige schrijfoperaties worden geserialiseerd; er is maximaal één actief seizoen. Een oud formulier zonder expliciete seizoen-ID vraagt om herladen in plaats van het inmiddels actieve seizoen onbedoeld te overschrijven.
 
 Beheerrechten worden ook in de database gecontroleerd; leden en anonieme bezoekers kunnen geen seizoenen schrijven. De tests voeren migratie 004 op echte lokale PostgreSQL-tabellen uit, controleren rechten, behoud van bestaande gegevens, versieconflicten en activatie. De browsercontrole gebruikt uitsluitend lokale testgegevens en controleert ook opslaan/herladen, eerste/volgende seizoen, fouten met invoerbehoud en responsieve weergave.
+
+## Wedstrijden filteren
+
+Op **Wedstrijden** kunnen leden en beheerders **Dag**, **Team**, **Locatie** en **Status** combineren en met **Filteren** toepassen. De dag is een Nederlandse kalenderdag; een team wordt zowel thuis als uit gevonden. Gelijknamige locaties worden per plaats onderscheiden. Opties komen uit de daadwerkelijk geïmporteerde wedstrijden van het actieve seizoen.
+
+**Programma** toont komende wedstrijden, **Historie** afgelopen/gespeelde wedstrijden en **Alle wedstrijden** beide. Filters blijven behouden bij wisselen van tab en bij pagineren; een nieuw filter begint op pagina 1. **Filters wissen** wist de selectie binnen de huidige tab. De zichtbare status en het statusfilter komen overeen: ‘Afgelopen’ betekent dat de begintijd verstreken is, ‘Gespeeld’ vereist een bevestigde bronstatus. Dit verandert geen inschrijfregels of planning. Er is voor de filters geen nieuwe databasemigratie nodig.
