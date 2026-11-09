@@ -5,7 +5,7 @@ import { configured, supabase } from './supabase/server';
 import { progress, type Duty, type Profile, type Enrollment } from './domain';
 import type { Season } from './seasons';
 export type Membership = { member_id: string; team_id: string; captain: boolean; norm_override: number | null };
-export type Team = { id: string; name: string; age_class: string };
+export type Team = { id: string; name: string; age_class: string; competition_level?:string|null };
 export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;postal_code?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number}[] };
 export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string };

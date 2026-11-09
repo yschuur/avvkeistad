@@ -9,6 +9,7 @@ import { HEX_COLOR } from '@/lib/branding';
 import { serviceClient,synchronizeMatches } from '@/lib/nevobo/service';
 import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
 import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
+import { competitionLevelSchema } from '@/lib/competition-rules';
 import { refereeLevelSchema } from '@/lib/referee-levels';
 import { loginError } from '@/lib/auth-errors';
 import { seasonSchema, type SeasonValues, type SeasonFormState } from '@/lib/seasons';
@@ -123,8 +124,8 @@ export async function activateSeason(f:FormData) {
 }
 export async function createTeam(f: FormData) {
   await run('/beheer', async () => {
-    const { db } = await manager(); const { error } = await db.rpc('create_team', { p_season: id.parse(f.get('season_id')), p_name: z.string().min(1).parse(text(f, 'name')), p_age: z.enum(['youth','senior']).parse(f.get('age')) });
-    if (error) throw new Error(error.message);
+    const { db } = await manager(); const { error } = await db.rpc('create_team_with_level', { p_competition:competitionLevelSchema.parse(text(f,'competition')), p_season: id.parse(f.get('season_id')), p_name: z.string().min(1).parse(text(f, 'name')), p_age: z.enum(['youth','senior']).parse(f.get('age')) });
+    if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
   });
 }
 export async function updateMember(f: FormData) {
@@ -186,10 +187,10 @@ export async function markNotificationRead(f:FormData) {
 }
 export async function createMatchDuty(f:FormData) {
  await run('/wedstrijden',async()=>{
-  const {db}=await manager();const {error}=await db.rpc('create_qualified_match_duty',{
+  const {db}=await manager();const {error}=await db.rpc('create_automatic_match_duty',{
    p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
-   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),p_qualification:refereeLevelSchema.parse(text(f,'qualification')),
-  });if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
+   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),
+  });if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
  });
 }
 
@@ -226,5 +227,12 @@ export async function setDutyQualification(f:FormData) {
  await run('/beheer',async()=>{
   const {db}=await manager();const {error}=await db.rpc('set_duty_qualification',{p_duty:id.parse(f.get('duty_id')),p_qualification:refereeLevelSchema.parse(text(f,'qualification'))});
   if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
+ });
+}
+
+export async function updateTeamCompetition(f:FormData) {
+ await run('/beheer/teams',async()=>{
+  const {db}=await manager();const {error}=await db.rpc('update_team_competition',{p_team:id.parse(f.get('team_id')),p_competition:competitionLevelSchema.parse(text(f,'competition'))});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
  });
 }

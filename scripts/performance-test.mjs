@@ -17,6 +17,7 @@ let testSeasons=[{...initialSeason}],seasonSaveFailure=false,seasonMigrationMiss
 const seasonStamp=()=>new Date(Date.UTC(2026,10,9,13,0,++seasonVersion)).toISOString();
 // All records below are isolated test fixtures. They are never imported by the app.
 const teamId='30000000-0000-4000-8000-000000000001';
+let testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
 let hideTestEnrollment=false;
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
@@ -98,7 +99,10 @@ const mock=createServer(async(req,res)=>{
   const input=JSON.parse(body);testDuty.required_qualification=input.p_qualification;testDuty.required_level=refereeCodes.indexOf(input.p_qualification)+1;return res.end('null');
  }
  if(url.pathname==='/rest/v1/rpc/create_qualified_duty') return res.end('null');
- if(url.pathname==='/rest/v1/rpc/create_qualified_match_duty') {
+ if(url.pathname==='/rest/v1/rpc/update_team_competition') {
+  const input=JSON.parse(body);testTeams.find(t=>t.id===input.p_team).competition_level=input.p_competition==='Overig'?null:input.p_competition;return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/create_automatic_match_duty') {
   const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:input.p_points}];return res.end(JSON.stringify(testDuty.id));
  }
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
@@ -140,7 +144,7 @@ const mock=createServer(async(req,res)=>{
   result=source.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${source.length}`:`*/${source.length}`);
  }
  if(url.pathname==='/rest/v1/club_branding') result=[brand];
- if(url.pathname==='/rest/v1/teams') result=[{id:teamId,name:'Testteam',age_class:'senior'}];
+ if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
    result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamId,captain:false,norm_override:null}));
@@ -429,18 +433,43 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),generalDuty.getByRole('button',{name:'Diensten aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_duty')).at(-1).body.p_qualification,'V4');
+ // Team competition persists, and a match requirement is derived with no manual override.
+ testTeams=[{id:teamId,name:'AVV Keistad HS 4',age_class:'senior',competition_level:'Derde klasse'}];
+ await adminPage.goto(base+'/beheer/teams');
+ await adminPage.getByRole('heading',{name:'Teams en niveaus',exact:true}).waitFor();
+ const teamForm=adminPage.getByRole('button',{name:'Niveau opslaan',exact:true}).locator('xpath=ancestor::form');
+ await teamForm.getByLabel('Competitieniveau',{exact:true}).selectOption('Superdivisie');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/teams'),teamForm.getByRole('button',{name:'Niveau opslaan'}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await adminPage.reload();assert.equal(await teamForm.getByLabel('Competitieniveau',{exact:true}).inputValue(),'Superdivisie');
+ await adminPage.getByText('Senioren · Geen clubscheidsrechter nodig',{exact:true}).waitFor();
+ testMatch.home_team='AVV Keistad HS 4';
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.getByText('Geen clubscheidsrechter nodig',{exact:true}).waitFor();
+ assert.equal(await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).count(),0);
+ await adminPage.goto(base+'/beheer/teams');
+ await teamForm.getByLabel('Competitieniveau',{exact:true}).selectOption('Eerste klasse');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/teams'),teamForm.getByRole('button',{name:'Niveau opslaan'}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await adminPage.getByText('Senioren · Minimaal V4',{exact:true}).waitFor();
  await adminPage.goto(base+'/wedstrijden?view=all');
  await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
  const matchDuty=adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
- await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).waitFor();
- assert.deepEqual(await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).locator('option').allTextContents(),['Kies een niveau',...refereeCodes]);
+ await matchDuty.getByText('Vereist scheidsrechtersniveau: V4 of hoger (automatisch).',{exact:true}).waitFor();
+ assert.equal(await matchDuty.locator('select[name=qualification]').count(),0);
  await matchDuty.getByLabel('Punten',{exact:true}).fill('2');
  await matchDuty.getByLabel('Geplande duur (minuten)',{exact:true}).fill('90');
- await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).selectOption('N1');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_match_duty')).at(-1).body.p_qualification,'N1');
- testMatch.referee_duties=[];
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/create_automatic_match_duty')).at(-1).body.p_qualification,undefined);
+ testMatch.referee_duties=[];testMatch.home_team='AVV Keistad HS 99';
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
+ await adminPage.getByText('Teamniveau ontbreekt. Controleer de teamlijst bij Beheer → Teams.',{exact:true}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).isDisabled(),true);
+ testMatch.home_team='Test thuis';
+ await page.goto(base+'/beheer/teams');await page.waitForURL(base+'/');
+ console.log('Competitieregels browser: competitieniveau opslaan/herladen, geen clubdienst vanaf promotieklasse, automatisch V4 daaronder, geen handmatige verlaging, onbekend team geblokkeerd en ledenafscherming. Alleen lokale testgegevens.');
  // The member view compares the new codes rather than old numbers.
  hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
  await page.goto(base+'/diensten');
@@ -543,10 +572,10 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/beheer','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/wedstrijden','/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':path==='/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/beheer/teams','/wedstrijden','/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':path==='/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
