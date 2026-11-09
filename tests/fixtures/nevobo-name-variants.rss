@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Actual items pasted by the user on 2026-11-09; selection is test-only. -->
+<rss xmlns:atom="http://www.w3.org/2005/Atom" xmlns:nevobo="https://www.api.nevobo.nl/rss/" version="2.0">
+<channel>
+<title>RSS feed Nederlandse Volleybalbond</title>
+<lastBuildDate>Mon, 09 Nov 2026 14:02:07 +0100</lastBuildDate>
+<item>
+<title><![CDATA[ 14 nov 13:00: A.G.A.V.S. - Soesterberg MA 1 - AVV Keistad MA 2 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2026205</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2026205</guid>
+<description><![CDATA[ Wedstrijd: 3000MA1F1 EA, Datum: zaterdag 14 november, 13:00, Speellocatie: Banninghal, Banningstraat 3, 3769AA Soesterberg ]]></description>
+<pubDate>Sat, 14 Nov 2026 13:00:00 +0100</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ 26 nov 18:00: AVV Keistad MB 3 - A.G.A.V.S. - Soesterberg MB 1 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2029483</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2029483</guid>
+<description><![CDATA[ Wedstrijd: 3000MB1E1 GD, Datum: donderdag 26 november, 18:00, Speellocatie: Midland, Zangvogelweg 138, 3815DP Amersfoort ]]></description>
+<pubDate>Thu, 26 Nov 2026 18:00:00 +0100</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ 27 nov 21:15: AVV Keistad HS 5 - Haarkliniek het Kale Balletje - USV Protos HS 3 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2017013</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2017013</guid>
+<description><![CDATA[ Wedstrijd: 3000H1I DI, Datum: vrijdag 27 november, 21:15, Speellocatie: Sportcomplex Amerena, De Velduil 2, 3815XT Amersfoort ]]></description>
+<pubDate>Fri, 27 Nov 2026 21:15:00 +0100</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ 5 feb 21:15: AVV Keistad HS 4 - Van Wijk Vastgoedonderhoud - Volleer HS 1 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2017044</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2017044</guid>
+<description><![CDATA[ Wedstrijd: 3000H1J DJ, Datum: vrijdag 5 februari, 21:15, Speellocatie: Sportcomplex Amerena, De Velduil 2, 3815XT Amersfoort ]]></description>
+<pubDate>Fri, 05 Feb 2027 21:15:00 +0100</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ Vervallen: 14 nov 15:00: Gemini S XC 1 - AVV Keistad MC 1 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2030783</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2030783</guid>
+<description><![CDATA[ Vervallen wedstrijd: 3000XC2I1 BC, Datum: zaterdag 14 november, 15:00, Speellocatie: Kerkelanden, Franciscusweg 6 a, 1216SK Hilversum ]]></description>
+<pubDate>Sat, 14 Nov 2026 15:00:00 +0100</pubDate>
+<nevobo:status>vervallen</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ 21 nov 9:00: AVV Keistad L2 2 - Forza Hoogland L2 3 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2084600</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2084600</guid>
+<description><![CDATA[ Wedstrijd: 3000VA21A3DE, Datum: zaterdag 21 november, 9:00, Speellocatie: Sportcomplex Amerena, De Velduil 2, 3815XT Amersfoort ]]></description>
+<pubDate>Sat, 21 Nov 2026 09:00:00 +0100</pubDate>
+<nevobo:status>concept</nevobo:status>
+</item>
+<item>
+<title><![CDATA[ 3 apr 11:00: Haarkliniek het Kale Balletje - USV Protos HS 3 - AVV Keistad HS 5 ]]></title>
+<link>https://api.nevobo.nl/permalink/wedstrijd/2017205</link>
+<guid>https://api.nevobo.nl/permalink/wedstrijd/2017205</guid>
+<description><![CDATA[ Wedstrijd: 3000H1I ID, Datum: zaterdag 3 april, 11:00, Speellocatie: Olympos, De Uithof, Uppsalalaan 3, 3584CT Utrecht ]]></description>
+<pubDate>Sat, 03 Apr 2027 11:00:00 +0200</pubDate>
+<nevobo:status>gepland</nevobo:status>
+</item>
+</channel>
+</rss>

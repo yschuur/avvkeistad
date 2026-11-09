@@ -55,6 +55,18 @@ function normalizeStatus(raw:string,hasDate:boolean):MatchStatus {
  // Unknown source states must not silently become bookable or be called cancelled.
  return 'missing';
 }
+function matchTeams(value:string):[string,string] {
+ // Spaced dashes also occur inside club/sponsor names. Only the match
+ // separator follows a complete team designation, e.g. MA 1, HS 3 or L4 2.
+ const separators=[...value.matchAll(/\s+[–—-]\s+/g)];
+ const candidates=separators.map(separator=>[
+  value.slice(0,separator.index).trim(),value.slice(separator.index!+separator[0].length).trim(),
+ ] as [string,string]).filter(teams=>teams.every(Boolean));
+ const designation=/\s+(?:[A-Z]{2}|L[1-6])\s*\d+$/i;
+ const valid=separators.length===1?candidates:candidates.filter(teams=>teams.every(team=>designation.test(team)));
+ if(valid.length!==1) throw new Error('nevobo_invalid_match_title');
+ return valid[0];
+}
 function normalizeItem(raw:Record<string,unknown>):ImportedMatch {
  const title=plain(raw.title),description=plain(raw.description),f=fields(description);
  const identity=sourceId(raw.guid,raw.link);
@@ -62,9 +74,9 @@ function normalizeItem(raw:Record<string,unknown>):ImportedMatch {
  const sourceStatus=plain(raw['nevobo:status'] ?? raw.status);
  const status=normalizeStatus(sourceStatus,Boolean(starts));
  if(status==='scheduled' && !starts) throw new Error('nevobo_invalid_match_date');
- const prefix=title.replace(/^(?:afgelast|uitgesteld|verplaatst|gespeeld)\s*:\s*/i,'').match(/^(\d{1,2})\s+([\p{L}.]+)\s+(\d{1,2}):(\d{2})\s*:\s*(.+)$/u);
- const teams=(prefix?.[5] ?? title).split(/\s+[–—-]\s+/);
- if(teams.length!==2 || !teams.every(t=>t.trim())) throw new Error('nevobo_invalid_match_title');
+ const cleanTitle=title.replace(/^(?:afgelast|geannuleerd|vervallen|afgezegd|uitgesteld|verplaatst|gespeeld|concept)\s*:\s*/i,'');
+ const prefix=cleanTitle.match(/^(\d{1,2})\s+([\p{L}.]+)\s+(\d{1,2}):(\d{2})\s*:\s*(.+)$/u);
+ const teams=matchTeams(prefix?.[5] ?? cleanTitle);
  if(starts && prefix) {
   const parts=new Intl.DateTimeFormat('nl-NL',{timeZone:'Europe/Amsterdam',day:'numeric',month:'numeric',hour:'numeric',minute:'numeric',hourCycle:'h23'}).formatToParts(new Date(starts));
   const part=(type:string)=>Number(parts.find(p=>p.type===type)?.value);
@@ -85,7 +97,7 @@ function normalizeItem(raw:Record<string,unknown>):ImportedMatch {
  return importedMatch.parse({
   external_id:identity.externalId,home_team:home,away_team:away,starts_at:starts,
   location:pieces[0] ?? '',level:f.competitie ?? f.niveau ?? f.klasse ?? '',address,postal_code:postal,city,court:f.veld ?? null,
-  match_code:f.wedstrijd ?? f.wedstrijdcode ?? null,source_url:identity.sourceUrl,source_description:description,
+  match_code:f.wedstrijd ?? f['vervallen wedstrijd'] ?? f.wedstrijdcode ?? null,source_url:identity.sourceUrl,source_description:description,
   source_details:{rss_item:raw,title,fields:f,pub_date:nodeText(raw.pubDate),status:sourceStatus,guid:nodeText(raw.guid)},
   status,is_home:club.test(home)?true:club.test(away)?false:null,
  });

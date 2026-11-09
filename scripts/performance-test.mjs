@@ -277,6 +277,19 @@ try {
  assert.equal((await syncRequest()).status,503);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/apply_nevobo_snapshot')).length,previousApplyCount);
  assert.equal(testMatch.starts_at,'2026-11-14T14:30:00.000Z','Een defecte bron wist de planning niet');
+ // Real source variants that previously stopped the entire import: club and
+ // sponsor dashes, a prefixed cancellation, draft mini matches and summer time.
+ refAssigned=false;
+ programXml=await readFile(new URL('../tests/fixtures/nevobo-name-variants.rss',import.meta.url),'utf8');
+ const variants=await syncRequest();assert.equal(variants.status,200);
+ assert.equal((await variants.json()).counts.updated,7);
+ const applied=authWrites.filter(r=>r.path.endsWith('/apply_nevobo_snapshot')).at(-1).body;
+ assert.equal(applied.p_complete,true);assert.equal(applied.p_matches.length,7);
+ assert.equal(applied.p_matches[0].home_team,'A.G.A.V.S. - Soesterberg MA 1');
+ assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2030783').status,'cancelled');
+ assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2084600').status,'missing');
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
  programXml=actualProgram;
  await adminPage.goto(base+'/wedstrijden?view=all');
  await adminPage.getByRole('button',{name:'Testmelding naar mij'}).click();

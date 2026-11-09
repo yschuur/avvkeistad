@@ -46,3 +46,38 @@ test('een expliciete afgelasting blijft geldig als de bron geen betrouwbare nieu
  const match=parseNevoboProgram(xml).matches[0];
  assert.equal(match.status,'cancelled');assert.equal(match.starts_at,null);assert.equal(match.external_id,'nevobo:1964526');
 });
+
+test('bewaart club- en sponsornamen met eigen streepjes uit de actuele Nevobo-feed',async()=>{
+ const snapshot=parseNevoboProgram(await readFile(new URL('./fixtures/nevobo-name-variants.rss',import.meta.url),'utf8'));
+ assert.equal(snapshot.complete,true);assert.equal(snapshot.matches.length,7);
+ assert.equal(snapshot.publishedAt,'2026-11-09T13:02:07.000Z');
+ const teams:Record<string,[string,string]>={
+  '2026205':['A.G.A.V.S. - Soesterberg MA 1','AVV Keistad MA 2'],
+  '2029483':['AVV Keistad MB 3','A.G.A.V.S. - Soesterberg MB 1'],
+  '2017013':['AVV Keistad HS 5','Haarkliniek het Kale Balletje - USV Protos HS 3'],
+  '2017044':['AVV Keistad HS 4','Van Wijk Vastgoedonderhoud - Volleer HS 1'],
+  '2030783':['Gemini S XC 1','AVV Keistad MC 1'],
+  '2084600':['AVV Keistad L2 2','Forza Hoogland L2 3'],
+  '2017205':['Haarkliniek het Kale Balletje - USV Protos HS 3','AVV Keistad HS 5'],
+ };
+ for(const m of snapshot.matches) assert.deepEqual([m.home_team,m.away_team],teams[m.external_id.replace('nevobo:','')]);
+ const cancelled=snapshot.matches.find(m=>m.external_id==='nevobo:2030783')!;
+ assert.equal(cancelled.status,'cancelled');assert.equal(cancelled.match_code,'3000XC2I1 BC');
+ assert.equal(cancelled.starts_at,'2026-11-14T14:00:00.000Z');
+ const draft=snapshot.matches.find(m=>m.external_id==='nevobo:2084600')!;
+ assert.equal(draft.status,'missing');assert.equal(draft.starts_at,'2026-11-21T08:00:00.000Z');
+ const summer=snapshot.matches.find(m=>m.external_id==='nevobo:2017205')!;
+ assert.equal(summer.starts_at,'2027-04-03T09:00:00.000Z');
+ assert.equal(summer.address,'De Uithof, Uppsalalaan 3');
+});
+
+test('onderscheidt teamgrenzen zonder eerste of laatste streepje blind te kiezen',async()=>{
+ const xml=await fixture(),original="Proglass/AVV Keistad DS 2 - Lammerink Installatiegroep/Set-Up '65 DS 1";
+ for(const separator of [' - ',' – ',' — ']) {
+  const [m]=parseNevoboProgram(xml.replace(original,'Club - Sponsor L4 2'+separator+'Andere club - Sponsor L4 3')).matches;
+  assert.equal(m.home_team,'Club - Sponsor L4 2');assert.equal(m.away_team,'Andere club - Sponsor L4 3');
+ }
+ for(const invalid of ['Club HS 1 - Tweede club HS 2 - Derde club HS 3','Club - Sponsor - Andere club','Club DS 1 - ',' - Club DS 1','Club zonder tegenstander']) {
+  assert.throws(()=>parseNevoboProgram(xml.replace(original,invalid)),/invalid_match_title/);
+ }
+});
