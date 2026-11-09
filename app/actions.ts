@@ -31,7 +31,7 @@ async function run(path: string, fn: () => Promise<void>) {
   let error: string | null = null;
   try { await fn(); } catch (e) { error = e instanceof z.ZodError ? 'Controleer de ingevulde gegevens.' : e instanceof Error ? e.message : 'De actie is niet gelukt.'; }
   revalidatePath('/', 'layout');
-  redirect(`${path}?${error ? 'error=' + encodeURIComponent(error) : 'success=Opgeslagen'}`);
+  redirect(`${path}${path.includes('?')?'&':'?'}${error ? 'error=' + encodeURIComponent(error) : 'success=Opgeslagen'}`);
 }
 export async function login(f: FormData) {
   if (!configured()) redirect('/');
@@ -61,21 +61,21 @@ export async function setPassword(f: FormData) {
   });
 }
 export async function enroll(f: FormData) {
-  await run('/diensten', async () => {
+  await run(text(f,'return_to')==='/beheer/planning'?'/beheer/planning':'/diensten', async () => {
     const db = await supabase();
     const { error } = await db.rpc('enroll', { p_duty: id.parse(f.get('duty_id')), p_takeover: f.get('takeover_id') ? id.parse(f.get('takeover_id')) : null, p_member: f.get('member_id') ? id.parse(f.get('member_id')) : null });
     if (error) throw new Error(error.message);
   });
 }
 export async function changeEnrollment(f: FormData) {
-  await run('/diensten', async () => {
+  await run(text(f,'return_to')==='/beheer/planning'?'/beheer/planning':'/diensten', async () => {
     const db = await supabase();
     const { error } = await db.rpc('change_enrollment', { p_enrollment: id.parse(f.get('enrollment_id')), p_action: z.enum(['withdraw','offer','unoffer','revoke']).parse(f.get('action')), p_reason: text(f, 'reason') || null });
     if (error) throw new Error(error.message);
   });
 }
 export async function createDuty(f: FormData) {
-  await run('/beheer', async () => {
+  await run('/beheer/planning', async () => {
     const { db } = await manager();
     const start = fromZonedTime(text(f, 'start'), 'Europe/Amsterdam');
     const end = fromZonedTime(text(f, 'end'), 'Europe/Amsterdam');
@@ -123,25 +123,26 @@ export async function activateSeason(f:FormData) {
   redirect('/beheer/seizoenen?'+(error?'error='+encodeURIComponent(error):'success='+encodeURIComponent('Actief seizoen gewijzigd.')));
 }
 export async function createTeam(f: FormData) {
-  await run('/beheer', async () => {
+  await run('/beheer/teams', async () => {
     const { db } = await manager(); const { error } = await db.rpc('create_team_with_level', { p_competition:competitionLevelSchema.parse(text(f,'competition')), p_season: id.parse(f.get('season_id')), p_name: z.string().min(1).parse(text(f, 'name')), p_age: z.enum(['youth','senior']).parse(f.get('age')) });
     if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
   });
 }
 export async function updateMember(f: FormData) {
-  await run('/beheer', async () => {
+  const member=id.safeParse(f.get('member_id'));
+  await run('/beheer/leden'+(member.success?'?member='+member.data:''), async () => {
     const { db } = await manager(); const { error } = await db.rpc('update_member_qualification', { p_member: id.parse(f.get('member_id')), p_season: id.parse(f.get('season_id')), p_team: id.parse(f.get('team_id')), p_captain: f.get('captain') === 'on', p_norm: z.number().min(0).nullable().parse(optionalNumber(f.get('norm'))), p_qualification: text(f,'qualification')?refereeLevelSchema.parse(text(f,'qualification')):null });
     if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
   });
 }
 export async function assignFunction(f: FormData) {
-  await run('/beheer', async () => {
+  await run('/beheer/functies', async () => {
     const { db } = await manager(); const { error } = await db.rpc('assign_function', { p_member: id.parse(f.get('member_id')), p_season: id.parse(f.get('season_id')), p_title: z.string().min(1).parse(text(f, 'title')), p_points: z.number().min(0).parse(number(f.get('points'))), p_start: text(f, 'start'), p_end: text(f, 'end') });
     if (error) throw new Error(error.message);
   });
 }
 export async function invite(f: FormData) {
-  await run('/beheer', async () => {
+  await run('/beheer/leden', async () => {
     const { role } = await manager();
     if (role !== 'admin') throw new Error('Alleen de admin mag accounts aanmaken.');
     if (!process.env.SUPABASE_SERVICE_ROLE_KEY || !process.env.NEXT_PUBLIC_SITE_URL) throw new Error('Configureer eerst de server-sleutel en de site-URL.');
@@ -161,13 +162,13 @@ export async function invite(f: FormData) {
   });
 }
 export async function cancelDuty(f: FormData) {
-  await run('/beheer', async () => {const {db}=await manager();const {error}=await db.rpc('cancel_duty',{p_duty:id.parse(f.get('duty_id'))});if(error) throw new Error(error.message);});
+  await run('/beheer/planning', async () => {const {db}=await manager();const {error}=await db.rpc('cancel_duty',{p_duty:id.parse(f.get('duty_id'))});if(error) throw new Error(error.message);});
 }
 export async function saveFunction(f: FormData) {
-  await run('/beheer', async () => {const {db}=await manager();const {error}=await db.rpc('save_function',{p_season:id.parse(f.get('season_id')),p_title:z.string().min(1).parse(text(f,'title')),p_points:z.number().min(0).parse(number(f.get('points')))});if(error) throw new Error(error.message);});
+  await run('/beheer/functies', async () => {const {db}=await manager();const {error}=await db.rpc('save_function',{p_season:id.parse(f.get('season_id')),p_title:z.string().min(1).parse(text(f,'title')),p_points:z.number().min(0).parse(number(f.get('points')))});if(error) throw new Error(error.message);});
 }
 export async function removeFunction(f: FormData) {
-  await run('/beheer', async () => {const {db}=await manager();const {error}=await db.rpc('remove_function',{p_assignment:id.parse(f.get('assignment_id'))});if(error) throw new Error(error.message);});
+  await run('/beheer/functies', async () => {const {db}=await manager();const {error}=await db.rpc('remove_function',{p_assignment:id.parse(f.get('assignment_id'))});if(error) throw new Error(error.message);});
 }
 
 export async function saveBranding(f: FormData) {
@@ -186,7 +187,7 @@ export async function markNotificationRead(f:FormData) {
  await run('/meldingen',async()=>{const db=await supabase();const {error}=await db.rpc('mark_notification_read',{p_notification:id.parse(f.get('notification_id'))});if(error) throw new Error('De melding kon niet worden bijgewerkt.');});
 }
 export async function createMatchDuty(f:FormData) {
- await run('/wedstrijden',async()=>{
+ await run('/beheer/wedstrijden',async()=>{
   const {db}=await manager();const {error}=await db.rpc('create_automatic_match_duty',{
    p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
    p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),
@@ -207,11 +208,11 @@ export async function syncNevobo() {
   }
  }catch(error){failed=true;message=syncErrorMessage(error instanceof Error?error.message:'');}
  revalidatePath('/', 'layout');
- redirect('/wedstrijden?'+(failed?'error=':'success=')+encodeURIComponent(message));
+ redirect('/beheer/wedstrijden?'+(failed?'error=':'success=')+encodeURIComponent(message));
 }
 
 export async function testMatchNotifications() {
- await run('/wedstrijden',async()=>{
+ await run('/beheer/wedstrijden',async()=>{
   const {user}=await manager();const config=mailConfig();
   if(!config) throw new Error('Stel eerst de Resend API-sleutel, het afzenderadres en de site-URL in.');
   const recipient=z.email().safeParse(user.email);if(!recipient.success) throw new Error('Je account heeft geen geldig e-mailadres.');
@@ -224,7 +225,7 @@ export async function testMatchNotifications() {
 }
 
 export async function setDutyQualification(f:FormData) {
- await run('/beheer',async()=>{
+ await run('/beheer/planning',async()=>{
   const {db}=await manager();const {error}=await db.rpc('set_duty_qualification',{p_duty:id.parse(f.get('duty_id')),p_qualification:refereeLevelSchema.parse(text(f,'qualification'))});
   if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
  });

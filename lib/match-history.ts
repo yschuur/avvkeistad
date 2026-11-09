@@ -33,10 +33,10 @@ export function eventMatchName(event:MatchEvent) {
  const state=record(event.new_state),home=text(state.home_team) || event.match?.home_team,away=text(state.away_team) || event.match?.away_team;
  return home&&away?`${home} – ${away}`:'Wedstrijdgegevens niet beschikbaar';
 }
-export function matchLogUrl(params:Record<string,string|undefined>,page=1) {
+export function matchLogUrl(params:Record<string,string|undefined>,page=1,base='/wedstrijden/log') {
  const query=new URLSearchParams();
  if(params.kind && Object.hasOwn(matchEventLabels,params.kind)) query.set('kind',params.kind);
  if(params.match) query.set('match',params.match);
  if(page>1) query.set('page',String(page));
- return '/wedstrijden/log'+(query.size?'?'+query:'');
+ return base+(query.size?'?'+query:'');
 }

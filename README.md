@@ -50,7 +50,7 @@ set role = 'admin', first_name = 'Jouw voornaam', last_name = 'Jouw achternaam'
 where email = 'jouw-eigen-emailadres';
 ```
 
-Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. Maak onder Beheer eerst een seizoen en teams aan, daarna kun je leden en beheerders uitnodigen. Stel je eigen teamindeling in als je ook lid bent.
+Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. Schakel linksonder Beheermodus in en maak bij Seizoenen en Teams het seizoen en de teams aan, daarna kun je leden en beheerders uitnodigen. Stel je eigen teamindeling in als je ook lid bent.
 
 ## 3. Vercel koppelen
 
@@ -205,7 +205,7 @@ Op **Wedstrijden** kunnen leden en beheerders **Dag**, **Team**, **Locatie** en 
 
 ## Nevobo-wijzigingslog bekijken
 
-Admin en beheerder openen **Wedstrijden → Wijzigingslog**. De bestaande `match_events`-historie uit migratie 003 wordt hier weergegeven; er is geen nieuwe migratie nodig. Bij Wedstrijddetails staat ook **Wijzigingshistorie bekijken** voor uitsluitend die wedstrijd.
+Admin en beheerder schakelen **Beheermodus** in en openen **Wedstrijden → Wijzigingslog**. De bestaande `match_events`-historie uit migratie 003 wordt hier weergegeven; er is geen nieuwe migratie nodig. Bij Wedstrijddetails staat ook **Wijzigingshistorie bekijken** voor uitsluitend die wedstrijd.
 
 Het log vergelijkt vastgelegde vorige/nieuwe begintijd, thuis-/uitteam, locatie, adres, postcode, plaats, veld en status. Het tijdstip is het moment waarop de app de wijziging vastlegde, niet het onbekende moment waarop Nevobo de bron wijzigde. De wedstrijdnaam komt uit de historische momentopname. De lijst bevat wijzigingen uit alle seizoenen, is filterbaar op soort/wedstrijd en heeft 25 momenten per pagina. Bestaande beheer-RLS blijft gelden; leden kunnen het wijzigingslog niet lezen en de app kan geen logregels handmatig aanpassen.
 
@@ -217,7 +217,7 @@ Voer op het bestaande project `supabase/migrations/005_referee_qualifications.sq
 
 De volgorde is **V6 < V4 < R2.2 < R2 < R1 < N3 < N2 < N1**. Een lid kan een fluitdienst doen met een vereist niveau gelijk aan of lager dan het eigen ingestelde niveau. Een onbekend/niet-ingesteld niveau geeft geen fluitbevoegdheid. Andere diensttypen blijven hun bestaande controles gebruiken.
 
-Beheerders kiezen bij **Beheer → Lid instellen** het behaalde scheidsrechtersniveau. ‘Niet ingesteld’ is een ontbrekende bevoegdheid, geen extra niveau; zo kan een lid zonder scheidsrechtersopleiding wel een teamindeling krijgen. Kies bij algemene fluitdiensten expliciet een vereist niveau. Vanaf migratie 006 krijgen gekoppelde wedstrijddiensten onder promotieklasse hun minimum automatisch uit het teamniveau; vanaf promotieklasse wordt geen clubdienst aangemaakt. Algemene bestaande fluitdiensten krijgen hun minimum onder **Beheer → Planning beheren → Vereist niveau → Niveau opslaan**. Stel na de migratie de juiste codes voor bestaande scheidsrechters en diensten eenmalig in.
+Beheerders kiezen bij **Beheermodus → Leden → Lid instellen** het behaalde scheidsrechtersniveau. ‘Niet ingesteld’ is een ontbrekende bevoegdheid, geen extra niveau; zo kan een lid zonder scheidsrechtersopleiding wel een teamindeling krijgen. Kies bij algemene fluitdiensten expliciet een vereist niveau. Vanaf migratie 006 krijgen gekoppelde wedstrijddiensten onder promotieklasse hun minimum automatisch uit het teamniveau; vanaf promotieklasse wordt geen clubdienst aangemaakt. Algemene bestaande fluitdiensten krijgen hun minimum onder **Beheermodus → Planning → Planning beheren → Vereist niveau → Niveau opslaan**. Stel na de migratie de juiste codes voor bestaande scheidsrechters en diensten eenmalig in.
 
 Dezelfde volgorde wordt gecontroleerd bij inschrijven, teamtoewijzing en overname, ook via directe of oudere RPC-aanroepen. Leden kunnen hun eigen niveau niet verhogen. Migratie 005 bewaart bestaande inschrijvingen en behaalde punten; aanbieden/afmelden en correcties blijven mogelijk volgens de bestaande regels. Migratie 006 controleert toekomstige toewijzingen opnieuw volgens de clubregels hieronder. De oude cijferkolommen blijven voor compatibiliteit bestaan; na een expliciete codekeuze gebruikt de app een overeenkomende interne rang. Die cijfers zijn geen diploma's en worden niet als opleidingsniveau getoond.
 
@@ -242,3 +242,22 @@ Vanaf promotieklasse, inclusief alle divisies, worden geen clubdiensten aangemaa
 **Beheer → Teams en niveaus** toont alle teams van het actieve seizoen en laat beheerders het competitieniveau aanpassen. Wedstrijden vanaf promotieklasse tonen **Geen clubscheidsrechter nodig** en bieden geen aanmaakactie. Alle schrijfwegen, ook oudere RPC’s met een N1-keuze, weigeren hiervoor clubdiensten. Bij wedstrijden daaronder is het minimum automatisch en niet handmatig te verlagen. Sponsoring verandert de teamidentiteit niet. Ook een uitwedstrijd wordt gekoppeld aan het Keistad-team; bij twee Keistad-teams geldt het hoogste minimum. Een ontbrekend of dubbelzinnig team sluit aanmaken/inschrijven, in plaats van terug te vallen op V6. Algemene, niet aan een wedstrijd gekoppelde fluitdiensten houden een expliciet gekozen minimum; een gereserveerd vrijwilligersteam is niet het spelende team.
 
 Database-triggers beschermen ook oude RPC's, directe toewijzingen door een beheerder/aanvoerder en overnames. Teamniveau- en bronnaamwijzigingen herberekenen toekomstige wedstrijddiensten; een diploma-aanpassing controleert bestaande toekomstige fluittoewijzingen opnieuw. Een toewijzing met een te laag of onbekend niveau wordt ingetrokken met een vastgelegde reden, een appmelding aan het lid en `referee_requirement_revoke` in `audit_log`. Een bestaande toekomstige clubdienst vanaf promotieklasse wordt geannuleerd, de bijbehorende toekomstige toewijzingen worden ingetrokken met melding **Clubfluitdienst vervallen** en auditactie `club_referee_not_needed`; de wedstrijd zelf blijft in het programma. Ook bij een latere promotie van een team werkt dit door. Geannuleerde clubdiensten worden niet automatisch heropend bij een latere degradatie; beheer kan dan een nieuwe clubdienst maken met de actuele regel. Er worden hiervoor geen automatische e-mails verstuurd. Bij een mislukte overname blijft de oorspronkelijke toewijzing behouden. Afgelopen diensten en behaalde punten blijven staan; verloren toekomstige planning telt niet als behaald. De eerste herberekening gebeurt atomair aan het einde van de teamimport, zodat een half vervangen teamlijst niet tot onterechte intrekkingen leidt.
+
+
+## Beheermodus en dashboard
+
+Admin en beheerder gebruiken de schakelaar **Beheermodus** linksonder om naar het beheerdashboard te gaan. Dezelfde schakelaar brengt hen terug naar de ledenomgeving. De stand volgt de URL en blijft dus correct na herladen, directe links of terugnavigeren. Mobiel staat de schakelaar onderaan het navigatiemenu. Een lid of aanvoerder zonder beheerrol krijgt deze toegang niet.
+
+| Menuonderdeel | Beheer |
+|---|---|
+| Dashboard | Actief seizoen, actuele aantallen, open plaatsen en opvolglinks |
+| Leden | Zoekfunctie, teamfilter, teamindeling, diploma en persoonlijke norm; uitnodigen uitsluitend voor admin |
+| Teams | Teams toevoegen, competitieniveaus en fluitregels |
+| Planning | Diensten/reeksen aanmaken, toewijzen, annuleren en inschrijvingen corrigeren |
+| Wedstrijden | Nevobo-programma, synchroniseren, clubfluitdiensten en wijzigingslog |
+| Functies | Vrijwilligersfuncties en vaste punten toekennen/intrekken |
+| Rapportage | Punten, tekorten, teamfilter en CSV-export |
+| Seizoenen | Aanmaken, bewerken en activeren van seizoenen |
+| Instellingen | Huisstijl en toegang tot wedstrijd-/seizoensinstellingen |
+
+De beheerpagina's staan onder `/beheer`. De ledenomgeving houdt `/`, `/diensten`, `/team`, `/wedstrijden` en `/meldingen`. Het ledenprogramma toont ook voor beheerders geen beheeracties; deze staan in `/beheer/wedstrijden`. Het oude `/wedstrijden/log` blijft bruikbaar als verwijzing naar het beveiligde beheerlog. Formulieren blijven na opslaan in hun beheeronderdeel; lidinstellingen houden de geselecteerde persoon vast. De bestaande rollen, SQL/RLS-controles, punten en fluitregels wijzigen niet. Hiervoor is geen nieuwe databasemigratie nodig.

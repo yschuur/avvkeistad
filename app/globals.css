@@ -322,3 +322,26 @@ input[aria-invalid=true] { border-color: var(--danger); }
 
 .correction-row .qualification-form { flex-wrap: wrap; align-items: flex-end; }
 .qualification-form .season-field { max-width: 230px; }
+
+/* Both workspaces share the sidebar; the URL determines the active mode. */
+.sidebar-nav { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.sidebar-bottom { flex-shrink: 0; }
+.mode-switch { display: flex; width: 100%; min-height: 52px; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-2); margin-bottom: var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); text-align: left; }
+.mode-switch:hover:not(:disabled) { background: var(--surface-hover); }
+.mode-switch strong, .mode-switch small { display: block; font-size: 11px; }
+.mode-switch strong { font-weight: 500; }
+.mode-switch small { color: var(--text-muted); margin-top: var(--space-1); }
+.switch-track { width: 30px; height: 18px; padding: 2px; border-radius: 12px; background: var(--text-muted); flex-shrink: 0; }
+.switch-track > span { display: block; width: 14px; height: 14px; border-radius: 50%; background: var(--surface); }
+.mode-switch[aria-checked=true] .switch-track { background: var(--accent-text); }
+.mode-switch[aria-checked=true] .switch-track > span { margin-left: 12px; }
+.management-links { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); column-gap: var(--space-5); }
+.management-links a, .management-attention a { display: flex; justify-content: space-between; gap: var(--space-3); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); color: var(--text); min-width: 0; }
+.management-links a:hover, .management-attention a:hover { color: var(--accent-text); }
+.management-links strong, .management-links small { display: block; }
+.management-links strong { font-size: 12px; font-weight: 500; }
+.management-links small { margin-top: var(--space-1); color: var(--text-muted); }
+.management-attention strong { font-variant-numeric: tabular-nums; }
+@media (max-width:768px) { .management-links { grid-template-columns: 1fr; } .sidebar-bottom { padding-top: var(--space-3); } }
+
+.management-dashboard { margin-bottom: var(--space-5); }

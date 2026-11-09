@@ -20,6 +20,7 @@ const teamId='30000000-0000-4000-8000-000000000001';
 let testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
 let hideTestEnrollment=false;
+let adminRole='admin';
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
 let matchFilterFixtures=null;
@@ -42,7 +43,7 @@ const passwords=new Map([['anna@example.test','local-test-password'],['bram@exam
 let mockUrl;
 const refereeQualifications=new Map([[memberA,'V6'],[memberB,'N1']]);
 const refereeCodes=['V6','V4','R2.2','R2','R1','N3','N2','N1'];
-const profile=id=>({id,first_name:id===admin?'Alex':id===memberA?'Anna':'Bram',last_name:'Test',email:id===admin?'admin@example.test':id===memberA?'anna@example.test':'bram@example.test',role:id===admin?'admin':'member',referee_level:refereeCodes.indexOf(refereeQualifications.get(id))+1,referee_qualification:refereeQualifications.get(id) ?? null,nevobo_code:null});
+const profile=id=>({id,first_name:id===admin?'Alex':id===memberA?'Anna':'Bram',last_name:'Test',email:id===admin?'admin@example.test':id===memberA?'anna@example.test':'bram@example.test',role:id===admin?adminRole:'member',referee_level:refereeCodes.indexOf(refereeQualifications.get(id))+1,referee_qualification:refereeQualifications.get(id) ?? null,nevobo_code:null});
 const token=id=>{
  const header=Buffer.from(JSON.stringify({alg:'ES256',typ:'JWT',kid:jwk.kid})).toString('base64url');
  const payload=Buffer.from(JSON.stringify({sub:id,role:'authenticated',iss:mockUrl+'/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),session_id:'40000000-0000-4000-8000-000000000001'})).toString('base64url');
@@ -154,7 +155,7 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]}];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
-  result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):[profile(id)];
+  result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):url.searchParams.has('id')?[profile(id)]:[profile(memberA),profile(memberB),profile(admin)];
  }
  if(url.pathname==='/rest/v1/seasons') {
   if(seasonMigrationMissing && url.searchParams.get('select')?.includes('updated_at')) {res.statusCode=400;return res.end(JSON.stringify({code:'42703',message:'column seasons.updated_at does not exist'}));}
@@ -203,6 +204,7 @@ try {
  }
  await expectRedirect('/beheer',cookieA,'/');
  await expectRedirect('/beheer/instellingen/huisstijl',cookieA,'/');
+ for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
  await expectRedirect('/',null,'/login');
  // A forged member ID in the cookie must not be trusted or reach the database.
  const forgedCookie=cookieA.split('; ').map(part=>{
@@ -302,11 +304,40 @@ try {
  await adminPage.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');
  await adminPage.getByRole('button',{name:'Inloggen'}).click();
  await adminPage.waitForURL(base+'/');await adminPage.getByText('Alex Test',{exact:true}).first().waitFor();
- await adminPage.getByRole('link',{name:'Beheer',exact:true}).click();
- await adminPage.getByRole('heading',{name:'Beheer',exact:true}).waitFor();
+ assert.equal(await page.getByRole('switch',{name:'Beheermodus'}).count(),0,'Members do not get a management switch');
+ assert.equal(await adminPage.getByRole('link',{name:'Beheer',exact:true}).count(),0);
+ const modeSwitch=adminPage.getByRole('switch',{name:'Beheermodus'});
+ assert.equal(await modeSwitch.getAttribute('aria-checked'),'false');
+ await modeSwitch.click();await adminPage.waitForURL(base+'/beheer');
+ await adminPage.getByRole('heading',{name:'Beheerdashboard',exact:true}).waitFor();
+ assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
+ const managementNav=adminPage.getByRole('navigation',{name:'Beheernavigatie'});
+ assert.deepEqual(await managementNav.getByRole('link').allTextContents(),['Dashboard','Leden','Teams','Planning','Wedstrijden','Functies','Rapportage','Seizoenen','Instellingen']);
+ assert.equal(await managementNav.getByRole('link',{name:'Dashboard',exact:true}).getAttribute('aria-current'),'page');
+ await adminPage.reload();assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
+ await modeSwitch.click();await adminPage.waitForURL(base+'/');
+ await adminPage.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
+ await adminPage.goBack();await adminPage.waitForURL(base+'/beheer');
+ assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
+ // Managers see all operational sections while invitations remain admin-only.
+ adminRole='manager';await adminPage.goto(base+'/beheer/leden');
+ await adminPage.getByRole('heading',{name:'Leden',exact:true}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Uitnodiging versturen',exact:true}).count(),0);
+ assert.equal(await modeSwitch.count(),1);
+ adminRole='admin';await adminPage.reload();
+ await adminPage.getByRole('button',{name:'Uitnodiging versturen',exact:true}).waitFor();
+ // Roster selection opens the actual member editor; name search is functional.
+ await adminPage.getByRole('link',{name:'Instellen voor Bram Test',exact:true}).click();
+ await adminPage.waitForURL(url=>url.searchParams.get('member')===memberB);
+ assert.equal(await adminPage.locator('#lidinstellen select[name=member_id]').inputValue(),memberB);
+ await adminPage.getByLabel('Zoeken op naam of e-mail').fill('Anna');
+ await adminPage.getByRole('button',{name:'Filteren',exact:true}).click();
+ await adminPage.getByText('1 gevonden',{exact:true}).waitFor();
+ assert.equal(await adminPage.getByRole('region',{name:'Ledenoverzicht'}).getByRole('row').count(),2);
+ console.log('Beheeromgeving: toggle, URL/herladen/terug, negen menuonderdelen, manager/admin-grenzen, ledenzoekfunctie en lidselectie geslaagd. Alleen lokale testgegevens.');
  // Season creation/editing must have separate identities and keep unsaved input
  // on a server rejection; activation is explicit and cancellable.
- await adminPage.getByRole('link',{name:'Seizoenen',exact:true}).click();
+ await adminPage.getByRole('navigation',{name:'Beheernavigatie'}).getByRole('link',{name:'Seizoenen',exact:true}).click();
  await adminPage.getByRole('heading',{name:'Seizoenen',exact:true}).waitFor();
  await adminPage.getByLabel('Seizoensnaam',{exact:true}).fill('Testseizoen bewerkt');
  await adminPage.getByLabel('Begindatum',{exact:true}).fill('2026-01-02');
@@ -412,7 +443,7 @@ try {
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(brand.primary_color,'#087D56');
  // All qualification selects use codes, including R2.2, and retain saved values.
- await adminPage.goto(base+'/beheer');
+ await adminPage.goto(base+'/beheer/leden');
  const memberForm=adminPage.getByRole('button',{name:'Lidinstellingen opslaan'}).locator('xpath=ancestor::form');
  const memberLevel=memberForm.getByLabel('Scheidsrechtersniveau',{exact:true});
  await memberLevel.waitFor();
@@ -421,6 +452,7 @@ try {
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(refereeQualifications.get(memberA),'R2.2');
  await adminPage.reload();assert.equal(await memberForm.getByLabel('Scheidsrechtersniveau',{exact:true}).inputValue(),'R2.2');
+ await adminPage.goto(base+'/beheer/planning');
  const generalDuty=adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).locator('xpath=ancestor::form');
  const futureDate=new Date(Date.now()+86400000).toISOString().slice(0,10);
  await generalDuty.getByLabel('Titel',{exact:true}).fill('Lokale testfluitdienst');
@@ -430,7 +462,7 @@ try {
  await generalDuty.getByLabel('Eindigt op',{exact:true}).fill(futureDate+'T20:00');
  await generalDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).selectOption('V4');
  assert.equal(await generalDuty.evaluate(form=>form.reportValidity()),true);
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),generalDuty.getByRole('button',{name:'Diensten aanmaken',exact:true}).click()]);
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),generalDuty.getByRole('button',{name:'Diensten aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_duty')).at(-1).body.p_qualification,'V4');
  // Team competition persists, and a match requirement is derived with no manual override.
@@ -444,7 +476,7 @@ try {
  await adminPage.reload();assert.equal(await teamForm.getByLabel('Competitieniveau',{exact:true}).inputValue(),'Superdivisie');
  await adminPage.getByText('Senioren · Geen clubscheidsrechter nodig',{exact:true}).waitFor();
  testMatch.home_team='AVV Keistad HS 4';
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.getByText('Geen clubscheidsrechter nodig',{exact:true}).waitFor();
  assert.equal(await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).count(),0);
  await adminPage.goto(base+'/beheer/teams');
@@ -452,18 +484,18 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/teams'),teamForm.getByRole('button',{name:'Niveau opslaan'}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  await adminPage.getByText('Senioren · Minimaal V4',{exact:true}).waitFor();
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
  const matchDuty=adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
  await matchDuty.getByText('Vereist scheidsrechtersniveau: V4 of hoger (automatisch).',{exact:true}).waitFor();
  assert.equal(await matchDuty.locator('select[name=qualification]').count(),0);
  await matchDuty.getByLabel('Punten',{exact:true}).fill('2');
  await matchDuty.getByLabel('Geplande duur (minuten)',{exact:true}).fill('90');
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(authWrites.filter(r=>r.path.endsWith('/create_automatic_match_duty')).at(-1).body.p_qualification,undefined);
  testMatch.referee_duties=[];testMatch.home_team='AVV Keistad HS 99';
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
  await adminPage.getByText('Teamniveau ontbreekt. Controleer de teamlijst bij Beheer → Teams.',{exact:true}).waitFor();
  assert.equal(await adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).isDisabled(),true);
@@ -475,23 +507,23 @@ try {
  await page.goto(base+'/diensten');
  await page.getByText('Scheidsrechtersniveau N3 vereist',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
- await adminPage.goto(base+'/beheer');
+ await adminPage.goto(base+'/beheer/planning');
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
  await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(testDuty.required_qualification,'R2.2');
  await page.goto(base+'/diensten');assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),false);
  hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
  console.log('Scheidsrechtersniveaus geslaagd: acht codes in opgegeven volgorde, R2.2 opslaan/herladen, bestaand dienstniveau aanpassen en blokkeren van te laag niveau. Alleen lokale testgegevens.');
  // A destructive action requires confirmation; dismissing does not submit.
- await adminPage.goto(base+'/beheer');
+ await adminPage.goto(base+'/beheer/planning');
  await adminPage.getByRole('button',{name:'Dienst annuleren',exact:true}).click();
  await adminPage.getByRole('dialog',{name:'Actie bevestigen'}).waitFor();
  await adminPage.getByRole('button',{name:'Annuleren',exact:true}).click();
  assert.equal(await adminPage.getByRole('dialog').count(),0);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/cancel_duty')).length,0);
  await adminPage.getByRole('button',{name:'Dienst annuleren',exact:true}).click();
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),adminPage.getByRole('button',{name:'Bevestigen',exact:true}).click()]);
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),adminPage.getByRole('button',{name:'Bevestigen',exact:true}).click()]);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/cancel_duty')).length,1);
  assert.equal(testDuty.cancelled,true);
  // Exercise the actual RSS adapter and server endpoints through a local-only
@@ -502,7 +534,7 @@ try {
  const importResult=await imported.json();assert.equal(importResult.counts.inserted,1);
  assert.equal(testMatch.external_id,'nevobo:1964526');assert.equal(testMatch.starts_at,'2026-11-14T13:30:00.000Z');
  assert.equal(testMatch.postal_code,'3815XT');assert.equal(sentEmails.length,0);
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.getByRole('button',{name:'Nu synchroniseren'}).click();
  await adminPage.getByRole('status').filter({hasText:/Import voltooid/}).waitFor();
  refAssigned=true;programXml=actualProgram.replaceAll('14:30','15:30');
@@ -526,10 +558,10 @@ try {
  assert.equal(applied.p_matches[0].home_team,'A.G.A.V.S. - Soesterberg MA 1');
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2030783').status,'cancelled');
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2084600').status,'missing');
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.getByRole('region',{name:'Wedstrijdprogramma'}).getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
  programXml=actualProgram;
- await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.getByRole('button',{name:'Testmelding naar mij'}).click();
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(sentEmails.length,2);assert.deepEqual(sentEmails[1].body.to,['admin@example.test']);
@@ -539,7 +571,7 @@ try {
  await page.goto(base+'/meldingen');
  assert.equal(await page.getByRole('heading',{name:/^Testmelding wedstrijdkoppeling(?:\s*Ongelezen)?$/}).count(),0);
  // Managers can inspect stored old/new values; members cannot open the log.
- await adminPage.goto(base+'/wedstrijden');
+ await adminPage.goto(base+'/beheer/wedstrijden');
  await adminPage.getByRole('link',{name:'Wijzigingslog',exact:true}).click();
  await adminPage.getByRole('heading',{name:'Wijzigingslog',exact:true}).waitFor();
  await adminPage.getByRole('status').filter({hasText:/^2 wijzigingsmomenten/}).waitFor();
@@ -552,16 +584,16 @@ try {
  await logForm.getByRole('button',{name:'Filteren',exact:true}).click();
  await adminPage.getByRole('status').filter({hasText:/^1 wijzigingsmoment /}).waitFor();
  assert.equal(await logArticles.count(),1);assert.equal(await movedArticle.count(),0);
- await adminPage.goto(base+'/wedstrijden/log?match=90000000-0000-4000-8000-000000000099');
+ await adminPage.goto(base+'/beheer/wedstrijden/log?match=90000000-0000-4000-8000-000000000099');
  await adminPage.getByText('Nog geen wedstrijdwijzigingen in deze selectie.',{exact:true}).waitFor();
  testMatchEvents=Array.from({length:27},(_,index)=>({...initialMatchEvents[0],id:'local-history-event-'+index}));
- await adminPage.goto(base+'/wedstrijden/log?kind=moved');
+ await adminPage.goto(base+'/beheer/wedstrijden/log?kind=moved');
  await adminPage.getByRole('status').filter({hasText:/^27 wijzigingsmomenten/}).waitFor();assert.equal(await logArticles.count(),25);
  await adminPage.getByRole('link',{name:'Volgende',exact:true}).click();
  await adminPage.getByText('Pagina 2 van 2',{exact:true}).waitFor();assert.equal(await logArticles.count(),2);
  assert.equal(new URL(adminPage.url()).searchParams.get('kind'),'moved');
  testMatchEvents=initialMatchEvents;historyUnavailable=true;
- await adminPage.goto(base+'/wedstrijden/log');
+ await adminPage.goto(base+'/beheer/wedstrijden/log');
  await adminPage.getByRole('alert').filter({hasText:'Het wijzigingslog kon niet worden geladen'}).waitFor();
  historyUnavailable=false;
  await page.goto(base+'/wedstrijden/log');await page.waitForURL(base+'/');
@@ -572,10 +604,10 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/beheer/teams','/wedstrijden','/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':path==='/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
@@ -587,6 +619,16 @@ try {
  await adminPage.getByRole('link',{name:'Diensten',exact:true}).click();
  await adminPage.waitForURL('**/diensten');
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
+ await adminPage.setViewportSize({width:390,height:600});
+ await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();
+ await modeSwitch.click();await adminPage.waitForURL(base+'/beheer');
+ assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
+ await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();
+ await adminPage.getByRole('dialog',{name:'Navigatie',exact:true}).waitFor();
+ const switchBounds=await modeSwitch.boundingBox();assert.ok(switchBounds && switchBounds.y>=0 && switchBounds.y+switchBounds.height<=600,'Mobile switch remains visible');
+ await adminPage.getByRole('navigation',{name:'Beheernavigatie'}).getByRole('link',{name:'Teams',exact:true}).click();
+ await adminPage.waitForURL(base+'/beheer/teams');
+ await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();await modeSwitch.click();await adminPage.waitForURL(base+'/');
  console.log('Designcontrole geslaagd: huisstijlpreview, opslaan/herladen/reset, member-toegangsbeperking, bevestigingsdialoog, mobiele navigatie en overflow op 390/768/1440 px. Alleen testfixtures.');
  console.log('Auth-integratie geslaagd: admin inloggen/beheer, onjuiste credentials, herstelmail zonder accountonthulling, standaard- en token-hash-herstellinks, wachtwoord wijzigen en opnieuw inloggen met exacte wachtwoordtekens. Geen echte e-mails verstuurd.');
  console.log(`Performance-integratie geslaagd: dashboard 9 API-requests (${dashboard.ms}ms), wedstrijden 7 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);

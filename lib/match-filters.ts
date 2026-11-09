@@ -43,11 +43,11 @@ export function selectMatches<T extends MatchFilterRecord>(source:T[],filters:Ma
  });
  return filters.view==='history'?matches.reverse():matches;
 }
-export function matchFilterUrl(filters:MatchFilters,options:{view?:MatchView;page?:number;clearMatch?:boolean}={}) {
+export function matchFilterUrl(filters:MatchFilters,options:{view?:MatchView;page?:number;clearMatch?:boolean}={},base='/wedstrijden') {
  const params=new URLSearchParams({view:options.view ?? filters.view});
  for(const key of ['day','team','location','status','match'] as const) {
   if(filters[key] && !(key==='match'&&options.clearMatch)) params.set(key,filters[key]);
  }
  if(options.page) params.set('page',String(options.page));
- return '/wedstrijden?'+params;
+ return base+'?'+params;
 }
