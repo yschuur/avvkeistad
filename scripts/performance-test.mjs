@@ -18,6 +18,7 @@ const seasonStamp=()=>new Date(Date.UTC(2026,10,9,13,0,++seasonVersion)).toISOSt
 // All records below are isolated test fixtures. They are never imported by the app.
 const teamId='30000000-0000-4000-8000-000000000001';
 const testDuty={id:'50000000-0000-4000-8000-000000000001',season_id:season,title:'Testdienst',kind:'bar',starts_at:new Date(Date.now()+86400000).toISOString(),ends_at:new Date(Date.now()+93600000).toISOString(),points:2,capacity:2,location:'Testlocatie',required_level:0,assigned_team_id:null,cancelled:false};
+let hideTestEnrollment=false;
 let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
 let matchFilterFixtures=null;
@@ -38,7 +39,9 @@ const records=[];
 const authWrites=[];
 const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
 let mockUrl;
-const profile=id=>({id,first_name:id===admin?'Alex':id===memberA?'Anna':'Bram',last_name:'Test',email:id===admin?'admin@example.test':id===memberA?'anna@example.test':'bram@example.test',role:id===admin?'admin':'member',referee_level:0,nevobo_code:null});
+const refereeQualifications=new Map([[memberA,'V6'],[memberB,'N1']]);
+const refereeCodes=['V6','V4','R2.2','R2','R1','N3','N2','N1'];
+const profile=id=>({id,first_name:id===admin?'Alex':id===memberA?'Anna':'Bram',last_name:'Test',email:id===admin?'admin@example.test':id===memberA?'anna@example.test':'bram@example.test',role:id===admin?'admin':'member',referee_level:refereeCodes.indexOf(refereeQualifications.get(id))+1,referee_qualification:refereeQualifications.get(id) ?? null,nevobo_code:null});
 const token=id=>{
  const header=Buffer.from(JSON.stringify({alg:'ES256',typ:'JWT',kid:jwk.kid})).toString('base64url');
  const payload=Buffer.from(JSON.stringify({sub:id,role:'authenticated',iss:mockUrl+'/auth/v1',aud:'authenticated',exp:Math.floor(Date.now()/1000)+3600,iat:Math.floor(Date.now()/1000),session_id:'40000000-0000-4000-8000-000000000001'})).toString('base64url');
@@ -88,6 +91,16 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/activate_season') {
   const input=JSON.parse(body);for(const s of testSeasons) {s.active=s.id===input.p_season;s.updated_at=seasonStamp();}return res.end('null');
  }
+ if(url.pathname==='/rest/v1/rpc/update_member_qualification') {
+  const input=JSON.parse(body);refereeQualifications.set(input.p_member,input.p_qualification);return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/set_duty_qualification') {
+  const input=JSON.parse(body);testDuty.required_qualification=input.p_qualification;testDuty.required_level=refereeCodes.indexOf(input.p_qualification)+1;return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/create_qualified_duty') return res.end('null');
+ if(url.pathname==='/rest/v1/rpc/create_qualified_match_duty') {
+  const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:input.p_points}];return res.end(JSON.stringify(testDuty.id));
+ }
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
   const input=JSON.parse(body);brand={primary_color:input.p_primary,secondary_color:input.p_secondary};return res.end('null');
@@ -133,7 +146,7 @@ const mock=createServer(async(req,res)=>{
    result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamId,captain:false,norm_override:null}));
  }
  if(url.pathname==='/rest/v1/duties') result=[testDuty];
- if(url.pathname==='/rest/v1/enrollments' && (!url.searchParams.get('member_id') || url.searchParams.get('member_id')==='eq.'+memberA)) result=[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}];
+ if(url.pathname==='/rest/v1/enrollments' && !hideTestEnrollment && (!url.searchParams.get('member_id') || url.searchParams.get('member_id')==='eq.'+memberA)) result=[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}];
  if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]}];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
@@ -394,6 +407,53 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/instellingen/huisstijl'),adminPage.getByRole('button',{name:'Kleuren opslaan'}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(brand.primary_color,'#087D56');
+ // All qualification selects use codes, including R2.2, and retain saved values.
+ await adminPage.goto(base+'/beheer');
+ const memberForm=adminPage.getByRole('button',{name:'Lidinstellingen opslaan'}).locator('xpath=ancestor::form');
+ const memberLevel=memberForm.getByLabel('Scheidsrechtersniveau',{exact:true});
+ await memberLevel.waitFor();
+ assert.deepEqual(await memberLevel.locator('option').allTextContents(),['Niet ingesteld',...refereeCodes]);
+ await memberLevel.selectOption('R2.2');await memberForm.getByRole('button',{name:'Lidinstellingen opslaan'}).click();
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(refereeQualifications.get(memberA),'R2.2');
+ await adminPage.reload();assert.equal(await memberForm.getByLabel('Scheidsrechtersniveau',{exact:true}).inputValue(),'R2.2');
+ const generalDuty=adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).locator('xpath=ancestor::form');
+ const futureDate=new Date(Date.now()+86400000).toISOString().slice(0,10);
+ await generalDuty.getByLabel('Titel',{exact:true}).fill('Lokale testfluitdienst');
+ await generalDuty.locator('select[name="kind"]').selectOption('referee');
+ await generalDuty.getByLabel('Locatie',{exact:true}).fill('Testhal');
+ await generalDuty.getByLabel('Begint op',{exact:true}).fill(futureDate+'T18:00');
+ await generalDuty.getByLabel('Eindigt op',{exact:true}).fill(futureDate+'T20:00');
+ await generalDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).selectOption('V4');
+ assert.equal(await generalDuty.evaluate(form=>form.reportValidity()),true);
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),generalDuty.getByRole('button',{name:'Diensten aanmaken',exact:true}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_duty')).at(-1).body.p_qualification,'V4');
+ await adminPage.goto(base+'/wedstrijden?view=all');
+ await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
+ const matchDuty=adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
+ await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).waitFor();
+ assert.deepEqual(await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).locator('option').allTextContents(),['Kies een niveau',...refereeCodes]);
+ await matchDuty.getByLabel('Punten',{exact:true}).fill('2');
+ await matchDuty.getByLabel('Geplande duur (minuten)',{exact:true}).fill('90');
+ await matchDuty.getByLabel('Vereist scheidsrechtersniveau',{exact:true}).selectOption('N1');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_match_duty')).at(-1).body.p_qualification,'N1');
+ testMatch.referee_duties=[];
+ // The member view compares the new codes rather than old numbers.
+ hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
+ await page.goto(base+'/diensten');
+ await page.getByText('Scheidsrechtersniveau N3 vereist',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
+ await adminPage.goto(base+'/beheer');
+ const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
+ await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(testDuty.required_qualification,'R2.2');
+ await page.goto(base+'/diensten');assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),false);
+ hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
+ console.log('Scheidsrechtersniveaus geslaagd: acht codes in opgegeven volgorde, R2.2 opslaan/herladen, bestaand dienstniveau aanpassen en blokkeren van te laag niveau. Alleen lokale testgegevens.');
  // A destructive action requires confirmation; dismissing does not submit.
  await adminPage.goto(base+'/beheer');
  await adminPage.getByRole('button',{name:'Dienst annuleren',exact:true}).click();

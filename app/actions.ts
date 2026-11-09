@@ -9,6 +9,7 @@ import { HEX_COLOR } from '@/lib/branding';
 import { serviceClient,synchronizeMatches } from '@/lib/nevobo/service';
 import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
 import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
+import { refereeLevelSchema } from '@/lib/referee-levels';
 import { loginError } from '@/lib/auth-errors';
 import { seasonSchema, type SeasonValues, type SeasonFormState } from '@/lib/seasons';
 
@@ -78,14 +79,14 @@ export async function createDuty(f: FormData) {
     const start = fromZonedTime(text(f, 'start'), 'Europe/Amsterdam');
     const end = fromZonedTime(text(f, 'end'), 'Europe/Amsterdam');
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) throw new Error('Controleer de begin- en eindtijd.');
-    const { error } = await db.rpc('create_duty', {
+    const { error } = await db.rpc('create_qualified_duty', {
       p_season: id.parse(f.get('season_id')), p_title: z.string().min(1).max(200).parse(text(f, 'title')),
       p_kind: z.enum(['bar','referee','event','lines']).parse(f.get('kind')), p_start: start.toISOString(), p_end: end.toISOString(),
       p_location: z.string().min(1).parse(text(f, 'location')), p_capacity: z.number().int().min(1).max(100).parse(number(f.get('capacity'))),
-      p_points: z.number().positive().parse(number(f.get('points'))), p_level: z.number().int().min(0).max(10).parse(number(f.get('level'))),
+      p_points: z.number().positive().parse(number(f.get('points'))), p_qualification: f.get('kind')==='referee'?refereeLevelSchema.parse(text(f,'qualification')):null,
       p_team: f.get('team_id') ? id.parse(f.get('team_id')) : null, p_repeat: z.number().int().min(1).max(53).parse(number(f.get('repeat'))),
     });
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
   });
 }
 export async function saveSeason(_previous:SeasonFormState,f:FormData):Promise<SeasonFormState> {
@@ -128,8 +129,8 @@ export async function createTeam(f: FormData) {
 }
 export async function updateMember(f: FormData) {
   await run('/beheer', async () => {
-    const { db } = await manager(); const { error } = await db.rpc('update_member', { p_member: id.parse(f.get('member_id')), p_season: id.parse(f.get('season_id')), p_team: id.parse(f.get('team_id')), p_captain: f.get('captain') === 'on', p_norm: z.number().min(0).nullable().parse(optionalNumber(f.get('norm'))), p_level: z.number().int().min(0).max(10).parse(number(f.get('level'))) });
-    if (error) throw new Error(error.message);
+    const { db } = await manager(); const { error } = await db.rpc('update_member_qualification', { p_member: id.parse(f.get('member_id')), p_season: id.parse(f.get('season_id')), p_team: id.parse(f.get('team_id')), p_captain: f.get('captain') === 'on', p_norm: z.number().min(0).nullable().parse(optionalNumber(f.get('norm'))), p_qualification: text(f,'qualification')?refereeLevelSchema.parse(text(f,'qualification')):null });
+    if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
   });
 }
 export async function assignFunction(f: FormData) {
@@ -185,10 +186,10 @@ export async function markNotificationRead(f:FormData) {
 }
 export async function createMatchDuty(f:FormData) {
  await run('/wedstrijden',async()=>{
-  const {db}=await manager();const {error}=await db.rpc('create_match_referee_duty',{
+  const {db}=await manager();const {error}=await db.rpc('create_qualified_match_duty',{
    p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
-   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),p_level:z.number().int().min(0).max(10).parse(number(f.get('level'))),
-  });if(error) throw new Error(error.message);
+   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),p_qualification:refereeLevelSchema.parse(text(f,'qualification')),
+  });if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
  });
 }
 
@@ -218,5 +219,12 @@ export async function testMatchNotifications() {
   if(error || !data) throw new Error('De testmelding kon niet worden opgeslagen. Controleer migratie 003.');
   const result=await sendMatchEmail({outbox_id:'',claim:'',notification_id:data.id,recipient:recipient.data,subject:data.title,body:data.body},config);
   if(!result.sent) throw new Error('De testmelding staat in de app, maar de mail kon niet worden verstuurd. Controleer het geverifieerde afzenderdomein en de API-sleutel in Resend.');
+ });
+}
+
+export async function setDutyQualification(f:FormData) {
+ await run('/beheer',async()=>{
+  const {db}=await manager();const {error}=await db.rpc('set_duty_qualification',{p_duty:id.parse(f.get('duty_id')),p_qualification:refereeLevelSchema.parse(text(f,'qualification'))});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
  });
 }

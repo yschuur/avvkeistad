@@ -319,3 +319,6 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .match-log-diff th:first-child { width: 20%; }
 .match-log-diff tbody th { background: var(--surface); color: var(--text-muted); }
 .match-log-filters select { max-width: 260px; }
+
+.correction-row .qualification-form { flex-wrap: wrap; align-items: flex-end; }
+.qualification-form .season-field { max-width: 230px; }
