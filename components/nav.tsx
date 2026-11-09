@@ -1,5 +1,6 @@
 'use client';
 import Link, { useLinkStatus } from 'next/link';
+import { useBranding } from './club-identity';
 import { ClubIdentity } from './club-identity';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, CalendarDays, Users, Bell, Trophy, SlidersHorizontal, UsersRound, CalendarRange, ListChecks, Award, ChartNoAxesCombined,UserRound,ExternalLink } from 'lucide-react';
@@ -7,9 +8,8 @@ function NavigationStatus() {
  const {pending}=useLinkStatus();
  return pending?<span className="nav-pending" role="status"><span className="loading-spinner" aria-hidden="true"/><span className="sr-only">Pagina laden…</span></span>:null;
 }
-export function Nav({management,captain,unread}:{management:boolean;captain:boolean;unread:number|null}) {
- const path=usePathname(),adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
- const links=adminMode?[
+function workspaceLinks(adminMode:boolean,captain:boolean) {
+ return adminMode?[
   {href:'/beheer',label:'Dashboard',icon:LayoutDashboard},
   {href:'/beheer/leden',label:'Leden',icon:Users},
   {href:'/beheer/teams',label:'Teams',icon:UsersRound},
@@ -20,10 +20,23 @@ export function Nav({management,captain,unread}:{management:boolean;captain:bool
   {href:'/beheer/seizoenen',label:'Seizoenen',icon:CalendarRange},
   {href:'/beheer/instellingen',label:'Instellingen',icon:SlidersHorizontal},
  ]:[{href:'/',label:'Mijn overzicht',icon:LayoutDashboard},{href:'/diensten',label:'Open diensten',icon:CalendarDays},{href:'/mijn-diensten',label:'Mijn diensten',icon:ListChecks},{href:'/profiel',label:'Mijn profiel',icon:UserRound},...(captain?[{href:'/team',label:'Mijn team',icon:Users}]:[])];
+}
+export function MobileNavLinks({management,captain}:{management:boolean;captain:boolean}) {
+ const path=usePathname(),adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
+ const destinations=adminMode?['/beheer','/beheer/planning','/beheer/wedstrijden']:['/','/diensten','/mijn-diensten','/profiel'];
+ const labels:Record<string,string>={'/':'Overzicht','/profiel':'Profiel','/diensten':'Diensten'};
+ return <>{workspaceLinks(adminMode,captain).filter(link=>destinations.includes(link.href)).map(({href,label,icon:Icon})=>{
+  const active=href==='/'||href==='/beheer'?path===href:path===href||path.startsWith(href+'/');
+  return <Link key={href} href={href} aria-current={active?'page':undefined} className={`mobile-nav-link ${active?'active':''}`}><Icon size={20}/><span>{labels[href]??label}</span><NavigationStatus/></Link>;
+ })}</>;
+}
+export function Nav({management,captain,unread}:{management:boolean;captain:boolean;unread:number|null}) {
+ const path=usePathname(),adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
+ const links=workspaceLinks(adminMode,captain);
  return <nav className="sidebar-nav" aria-label={adminMode?'Beheernavigatie':'Hoofdnavigatie'}>{links.map(({href,label,icon:Icon})=>{const active=href==='/'||href==='/beheer'?path===href:path===href||path.startsWith(href+'/');return <Link key={href} href={href} aria-current={active?'page':undefined} className={`nav-link ${active?'active':''}`}><Icon size={16}/><span>{label}</span>{href==='/meldingen'&&unread!==null&&unread>0&&<span className="count" aria-label={`${unread} ongelezen`}>{unread}</span>}<NavigationStatus/></Link>;})}</nav>;
 }
 export function WorkspaceLabel() {
- const path=usePathname();return <span>{path==='/beheer'||path.startsWith('/beheer/')?'Beheeromgeving':'Vrijwilligersportaal'}</span>;
+ const path=usePathname(),branding=useBranding();return <span className="workspace-label"><strong className="mobile-club-name">{branding.clubName}</strong><span>{path==='/beheer'||path.startsWith('/beheer/')?'Beheeromgeving':'Vrijwilligersportaal'}</span></span>;
 }
 export function BrandLink() {
  const path=usePathname();return <Link href={path==='/beheer'||path.startsWith('/beheer/')?'/beheer':'/'} className="brand"><ClubIdentity/></Link>;

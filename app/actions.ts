@@ -183,7 +183,7 @@ export async function saveBranding(f: FormData) {
     const name=text(f,'clubName'),logo=text(f,'logoData')||null;
     if(full&&(!validClubName(name)||!validLogoData(logo))) throw new Error('Controleer de verenigingsnaam en het logo.');
     const {error}=full?await db.rpc('save_club_identity',{p_name:name,p_logo:logo,p_primary:primary,p_secondary:secondary,p_accent:color.parse(text(f,'accentColor')).toUpperCase()}):await db.rpc('save_club_branding',{p_primary:primary,p_secondary:secondary});
-    if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 007_club_identity.sql uit om de volledige huisstijl op te slaan.':'De huisstijl kon niet worden opgeslagen. Controleer de gegevens en je beheerrechten.');
+    if(error) throw new Error(error.code==='PGRST202'?'De huisstijlfunctie is nog niet beschikbaar via de database-API. Als migratie 007 net is uitgevoerd, ververs dan de API-schemacache in Supabase en probeer opnieuw.':'De huisstijl kon niet worden opgeslagen. Controleer de gegevens en je beheerrechten.');
     updateTag('club-branding');
   });
 }
