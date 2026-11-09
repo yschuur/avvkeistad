@@ -176,7 +176,6 @@ export async function syncNevobo() {
   else {
    const counts=z.object({inserted:z.number(),updated:z.number(),skipped:z.number()}).parse(result.counts);
    message=`Import voltooid: ${counts.inserted} nieuw, ${counts.updated} gewijzigd, ${counts.skipped} buiten het actieve seizoen.`;
-   if('configured' in result.mail && !result.mail.configured) message+=' E-mail is nog niet ingesteld; appmeldingen worden wel opgeslagen.';
    if('error' in result.mail || ('failed' in result.mail && result.mail.failed>0)) message+=' Niet-verstuurde e-mails blijven in de verzendwachtrij.';
   }
  }catch(error){failed=true;message=syncErrorMessage(error instanceof Error?error.message:'');}

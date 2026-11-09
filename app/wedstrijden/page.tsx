@@ -11,7 +11,7 @@ function safeSource(value:string|null|undefined) {
  try {const u=new URL(value);return u.protocol==='https:' && ['nevobo.nl','www.nevobo.nl','api.nevobo.nl','volleybal.nl','www.volleybal.nl'].includes(u.hostname)?u.href:null;}catch{return null;}
 }
 export default async function MatchesPage({searchParams}:{searchParams:Promise<Record<string,string|undefined>>}) {
- const data=await getData('matches'),params=await searchParams,manager=data.profile.role!=='member',now=new Date();
+ const data=await getData('matches'),params=await searchParams,manager=data.profile.role!=='member',emailConfigured=Boolean(mailConfig()),now=new Date();
  const view=params.view==='history'?'history':params.view==='all'?'all':'upcoming';
  const matches=data.matches.filter(m=>{
   if(params.match && m.id!==params.match) return false;
@@ -26,8 +26,8 @@ export default async function MatchesPage({searchParams}:{searchParams:Promise<R
  const pageUrl=(target:number)=>'/wedstrijden?'+new URLSearchParams({view,page:String(target),...(params.match?{match:params.match}:{})});
  const sync=data.syncState;
  const stale=sync?.last_success_at && now.getTime()-new Date(sync.last_success_at).getTime()>5*3600000;
- return <Shell data={data}><Heading title="Wedstrijden">{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && <form action={testMatchNotifications}><SubmitButton className="button secondary" disabled={!mailConfig()}>Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>
-  {manager && !mailConfig() && <p className="notice warning">Resend is nog niet ingesteld. Appmeldingen worden opgeslagen; vul de mailinstellingen in Vercel in om e-mails te verzenden.</p>}<div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
+ return <Shell data={data}><Heading title="Wedstrijden">{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>
+  <div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
   {(stale || (manager && sync?.last_error_code)) && <p className="notice warning" role="alert">De wedstrijdgegevens zijn mogelijk verouderd. De laatste automatische synchronisatie moet worden gecontroleerd.</p>}
   <div className="filter-bar"><div className="tabs"><Link href="/wedstrijden" className={view==='upcoming'?'selected':''}>Programma</Link><Link href="/wedstrijden?view=history" className={view==='history'?'selected':''}>Historie</Link>{params.match && <Link href="/wedstrijden">Selectie wissen</Link>}</div><span className="muted small">{matches.length} wedstrijden · Nederlandse tijd</span></div>
   <div className="table-wrap" role="region" aria-label="Wedstrijdprogramma" tabIndex={0}><table><thead><tr><th>Datum / tijd</th><th>Wedstrijd</th><th>Locatie</th><th>Status</th><th>Scheidsrechter</th></tr></thead><tbody>{visible.map(m=>{

@@ -85,7 +85,7 @@ Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. M
 
 ## Nog te voltooien vóór clubbrede ingebruikname
 
-- **Nevobo-koppeling:** geïmplementeerd met parser, wijzigingshistorie, appmeldingen en Resend. Activering op de eigen omgeving vereist migratie 003, mailinstellingen, een eerste gecontroleerde import en Supabase Cron; zie de activatiestappen hieronder. De volledige live bronverbinding en echte e-mailaflevering zijn nog niet vanuit deze ontwikkelomgeving geverifieerd.
+- **Nevobo-koppeling:** geïmplementeerd met parser, wijzigingshistorie, appmeldingen en Resend. Activering van de import vereist migratie 003, een eerste gecontroleerde import en Supabase Cron; Resend is optioneel en kan later worden ingesteld; zie de activatiestappen hieronder. De volledige live bronverbinding en echte e-mailaflevering zijn nog niet vanuit deze ontwikkelomgeving geverifieerd.
 - De gebruiker heeft een werkende live login bevestigd. Uitnodigingen, SMTP en nieuwe migraties moeten nog op het eigen project worden gecontroleerd; de ontwikkeltests gebruiken een lokale testbackend.
 - Wijzigingsmeldingen voor gekoppelde scheidsrechters zijn ingebouwd. Bij verplaatsing blijft de toewijzing behouden; de scheidsrechter moet controleren of de nieuwe planning past. Algemene dienstherinneringen buiten deze wedstrijdmeldingen zijn nog niet ingebouwd.
 - Scheidsrechtersniveaus zijn voorlopig genummerd 0–10. De concrete Nevobo-opleidingen en toegestane competities moeten aan deze niveaus worden gekoppeld voordat automatische fluitdiensten actief worden.
@@ -136,42 +136,47 @@ De directe bronverbinding is vanuit de Codex-cloudomgeving geblokkeerd. De volle
 
 Voer op het bestaande Supabase-project **alleen** `supabase/migrations/003_nevobo_matches.sql` uit in de SQL Editor. Start niet opnieuw met migratie 001. Migratie 003 voegt wedstrijdvelden, historie, meldingen, een verzendwachtrij en gecontroleerde functies toe. Bestaande leden, inschrijvingen en punten blijven behouden. De migratie is herhaalbaar zonder opgeslagen data te wissen. Wacht tot Vercel de nieuwe commit op `main` als Ready toont.
 
-### 2. Resend en veilige instellingen
+### 2. Alleen import: Vercel-instellingen
 
-1. Maak een account aan op https://resend.com en voeg een eigen afzenderdomein toe. Voer de door Resend opgegeven DNS-records in bij de domeinbeheerder en wacht op verificatie.
-2. Maak een API-key met verzendrechten voor het geverifieerde domein.
-3. Voeg in Vercel bij Production de servervariabelen toe:
-   - `RESEND_API_KEY`: de Resend-key.
-   - `NOTIFICATION_FROM_EMAIL`: een afzenderadres op het geverifieerde domein, alleen het e-mailadres (geen weergavenaam).
-   - `CRON_SECRET`: een willekeurig geheim van minimaal 32 tekens, bewaard in je wachtwoordmanager.
-4. Controleer de bestaande `SUPABASE_SERVICE_ROLE_KEY`, `NEXT_PUBLIC_SUPABASE_URL` en `NEXT_PUBLIC_SITE_URL`. De site-URL moet naar de vaste app verwijzen. De server-sleutel en cron-token mogen nooit een `NEXT_PUBLIC_`-prefix krijgen.
-5. Redeploy na het instellen van variabelen. Deel geheime waarden nooit in chat, broncode of SQL-bestanden.
+Resend is niet nodig om het wedstrijdprogramma op te halen. Laat `RESEND_API_KEY` en `NOTIFICATION_FROM_EMAIL` leeg zolang e-mail nog niet wordt gebruikt. De import blijft werken en appmeldingen worden opgeslagen; de app toont geen mailwaarschuwing of mailtestknop zonder volledige mailconfiguratie.
 
-### 3. Eerste import en testmelding
+1. Controleer bij Vercel → Settings → Environment Variables → Production de bestaande `SUPABASE_SERVICE_ROLE_KEY` en `NEXT_PUBLIC_SUPABASE_URL` van het juiste Supabase-project.
+2. Voeg voor de automatische taak `CRON_SECRET` toe: een willekeurig geheim van minimaal 32 tekens, bewaard in je wachtwoordmanager. Handmatig synchroniseren vereist dit geheim niet.
+3. Controleer dat `NEXT_PUBLIC_SITE_URL` de vaste app-URL is. De server-sleutel en cron-token mogen nooit een `NEXT_PUBLIC_`-prefix krijgen.
+4. Redeploy na het instellen van variabelen. Deel geheime waarden nooit in chat, broncode of SQL-bestanden.
+
+### 3. Eerste import
 
 1. Zorg dat onder Beheer het juiste actieve seizoen is ingesteld.
 2. Open als admin of beheerder **Wedstrijden → Nu synchroniseren**. De import meldt hoeveel wedstrijden nieuw, gewijzigd of buiten het actieve seizoen zijn. Nieuwe wedstrijden buiten de datums van dit seizoen worden overgeslagen; bestaande wedstrijden en hun historie worden niet naar een ander seizoen verplaatst.
 3. Controleer enkele wedstrijden tegen de bron, inclusief datum, Nederlandse tijd en locatie.
-4. Klik **Testmelding naar mij**. Deze expliciete test verstuurt uitsluitend naar het e-mailadres van je eigen ingelogde beheeraccount en plaatst een echte testmelding in je eigen app-inbox. Er worden geen wedstrijdgegevens aangepast. Controleer Meldingen en je mailbox/spammap. Een API-acceptatie door Resend bewijst op zichzelf nog geen ontvangst in de inbox.
-5. Maak voor een toekomstige wedstrijd een gekoppelde fluitdienst aan. Kies punten, geplande duur en vereiste bevoegdheid expliciet; deze waarden worden niet geraden uit de wedstrijdcode. Leden schrijven zich via Diensten in; beheerders kunnen via Beheer een lid toewijzen. Alleen gekoppelde, actieve scheidsrechters ontvangen wijzigingsmeldingen.
+4. Optioneel: maak voor een toekomstige wedstrijd een gekoppelde fluitdienst aan. Kies punten, geplande duur en vereiste bevoegdheid expliciet; deze waarden worden niet geraden uit de wedstrijdcode. Leden schrijven zich via Diensten in; beheerders kunnen via Beheer een lid toewijzen.
 
-### 4. Vieruurlijkse taak
+### 4. Vieruurlijkse importtaak
 
 Vercel Hobby ondersteunt geen vieruurlijkse native cron, daarom gebruikt deze app **Supabase Cron** voor de planning en Vercel voor de verwerking.
 
 1. Open Vault in Supabase en maak een secret met naam `avv_nevobo_cron_secret`. Vul daar veilig exact dezelfde waarde in als `CRON_SECRET` in Vercel.
 2. Voer daarna `supabase/nevobo_cron.sql` uit. Controleer daarin de app-URL als je een andere vaste URL gebruikt. Het script weigert activering zolang geen eerste geslaagde import of veilige token in Vault bestaat; het bevat zelf geen geheime waarden.
-3. Het script registreert twee benoemde jobs, zonder andere jobs te vervangen:
-   - `avv-keistad-nevobo-import`: `0 */4 * * *` (elke vier uur, UTC).
-   - `avv-keistad-nevobo-mail`: elke minuut voor afleveren en opnieuw proberen van de mailwachtrij. Dit haalt de wedstrijdbron niet opnieuw op.
+3. Het script registreert uitsluitend `avv-keistad-nevobo-import`: `0 */4 * * *` (elke vier uur, UTC). Andere jobs worden niet gewijzigd en er wordt geen mailtaak aangemaakt.
 4. Controleer in Supabase Cron de uitvoeringen en bij HTTP-fouten de pg_net-responsen (`net._http_response`). De importstatus en de laatste succesvolle import staan in de app. Meer dan vijf uur zonder succesvolle import geeft een waarschuwing.
 
-De cron-token staat alleen in Vercel en Vault; de SQL-job verwijst naar de Vault-naam. De endpoints `/api/nevobo/sync` en `/api/nevobo/notifications` weigeren verzoeken zonder de juiste bearer-token. Een importlease voorkomt gelijktijdige imports; een defecte of tegenstrijdige bron wordt niet gedeeltelijk toegepast.
+De cron-token staat alleen in Vercel en Vault; de SQL-job verwijst naar de Vault-naam. Het endpoint `/api/nevobo/sync` weigert verzoeken zonder de juiste bearer-token. Een importlease voorkomt gelijktijdige imports; een defecte of tegenstrijdige bron wordt niet gedeeltelijk toegepast.
+
+### 5. Later optioneel: Resend en e-mailmeldingen
+
+1. Maak een account aan op https://resend.com en voeg een eigen afzenderdomein toe. Voer de door Resend opgegeven DNS-records in bij de domeinbeheerder en wacht op verificatie.
+2. Maak een API-key met verzendrechten voor het geverifieerde domein.
+3. Voeg in Vercel bij Production `RESEND_API_KEY` en `NOTIFICATION_FROM_EMAIL` toe. Het afzenderadres moet op het geverifieerde domein staan, alleen het e-mailadres (geen weergavenaam). Controleer ook `NEXT_PUBLIC_SITE_URL` en redeploy. Vanaf dit moment kan de import ook klaargezette wijzigingsmails afleveren; opgeslagen mailberichten worden behouden zolang e-mail nog uitstaat.
+4. Klik als beheerder **Wedstrijden → Testmelding naar mij**. Deze expliciete test verstuurt uitsluitend naar het e-mailadres van je eigen ingelogde beheeraccount en plaatst een echte testmelding in je eigen app-inbox. Er worden geen wedstrijdgegevens aangepast. Controleer Meldingen en je mailbox/spammap. Een API-acceptatie door Resend bewijst op zichzelf nog geen ontvangst in de inbox.
+5. Voer pas daarna `supabase/nevobo_mail_cron.sql` uit. Dit voegt de afzonderlijke job `avv-keistad-nevobo-mail` toe voor de mailwachtrij, elke minuut. Dezelfde Vault-token wordt gebruikt; de wedstrijdbron wordt hierbij niet opgehaald. Het endpoint `/api/nevobo/notifications` vereist dezelfde bearer-token.
+
+Als de eerdere versie van het cronbestand de mailtaak al heeft aangemaakt, blijft die taak behouden. Zonder Resend-configuratie verstuurt deze geen mail; desgewenst kan alleen `avv-keistad-nevobo-mail` in Supabase Cron worden uitgeschakeld.
 
 ### Wedstrijd- en meldingsgedrag
 
 - Elke gewijzigde begintijd of locatie werkt de gekoppelde fluitdienst bij en bewaart de toewijzing en puntenwaarde. Zelf ingestelde diensttitels blijven behouden; automatisch gegenereerde teamtitels bewegen mee met een gewijzigde tegenstander.
-- De betrokken scheidsrechters ontvangen een appmelding en een e-mail via de wachtrij. Vorige en nieuwe datum/tijd en locatie worden vermeld. Vergrendeling en unieke wijzigings-ID's voorkomen gemiste toewijzingen tijdens inschrijven en dubbele meldingen bij dezelfde import.
+- De betrokken scheidsrechters ontvangen een appmelding en, wanneer Resend is ingesteld, een e-mail via de wachtrij. Vorige en nieuwe datum/tijd en locatie worden vermeld. Vergrendeling en unieke wijzigings-ID's voorkomen gemiste toewijzingen tijdens inschrijven en dubbele meldingen bij dezelfde import.
 - `afgelast` sluit de dienst en laat de punten vervallen, met behoud van historie. Herstel door de bron kan een bronannulering terugdraaien; een handmatige annulering door beheer wordt niet ongedaan gemaakt.
 - Zodra een wedstrijd begint, kan niemand meer inschrijven, ook tussen twee imports en via een directe databaseactie. ‘Gespeeld’ wordt uitsluitend gebruikt bij een expliciete bronstatus; een verstreken tijd heet ‘Afgelopen’ en staat onder Historie.
 - Verdwijnt een toekomstige wedstrijd uit een volledig, succesvol gelezen niet-leeg programma, dan wordt de status ‘niet bevestigd’: inschrijven en puntentoekenning worden geblokkeerd en de toegewezen scheidsrechter krijgt bericht. Dit wordt niet zonder bronbewijs een afgelasting genoemd. Een lege of foutieve feed annuleert niet massaal wedstrijden.
