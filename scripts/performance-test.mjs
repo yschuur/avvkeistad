@@ -42,6 +42,7 @@ const cronToken='local-test-cron-token-not-a-real-secret-12345';
 let syncState={last_started_at:null,last_success_at:null,last_error_code:null,feed_published_at:null,imported_count:0,updated_count:0};
 const records=[];
 const authWrites=[];
+let refereePoints=2,dutySettingsMissing=false;
 const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
 let mockUrl;
 const refereeQualifications=new Map([[memberA,'V6'],[memberB,'N1']]);
@@ -102,12 +103,18 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/set_duty_qualification') {
   const input=JSON.parse(body);testDuty.required_qualification=input.p_qualification;testDuty.required_level=refereeCodes.indexOf(input.p_qualification)+1;return res.end('null');
  }
- if(url.pathname==='/rest/v1/rpc/create_qualified_duty') return res.end('null');
+ if(url.pathname==='/rest/v1/rpc/create_default_duty') return res.end('null');
  if(url.pathname==='/rest/v1/rpc/update_team_competition') {
   const input=JSON.parse(body);testTeams.find(t=>t.id===input.p_team).competition_level=input.p_competition==='Overig'?null:input.p_competition;return res.end('null');
  }
- if(url.pathname==='/rest/v1/rpc/create_automatic_match_duty') {
-  const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:input.p_points}];return res.end(JSON.stringify(testDuty.id));
+ if(url.pathname==='/rest/v1/rpc/create_team_match_duty') {
+  const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:refereePoints,assigned_team_id:input.p_team}];return res.end(JSON.stringify(testDuty.id));
+ }
+ if(url.pathname==='/rest/v1/rpc/save_duty_settings') {refereePoints=JSON.parse(body).p_referee_points;return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/assign_duty_team') {
+  const input=JSON.parse(body),duty=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);if(duty) duty.assigned_team_id=input.p_team;
+  for(const linked of testMatch.referee_duties) if(linked.id===input.p_duty) linked.assigned_team_id=input.p_team;
+  return res.end('null');
  }
  if(url.pathname==='/rest/v1/rpc/enroll') {
   const input=JSON.parse(body);
@@ -160,6 +167,10 @@ const mock=createServer(async(req,res)=>{
   if((publicBrandingFailure&&!authenticated)||(privateBrandingFailure&&authenticated)) {res.statusCode=503;return res.end(JSON.stringify({code:'PGRST000',message:'Local temporary read failure'}));}
   if(identityMigrationMissing && url.searchParams.get('select').includes('club_name')) {res.statusCode=400;return res.end(JSON.stringify({code:'42703',message:'missing club_name'}));}
   result=[identityMigrationMissing?{primary_color:brand.primary_color,secondary_color:brand.secondary_color}:brand];
+ }
+ if(url.pathname==='/rest/v1/duty_settings') {
+  if(dutySettingsMissing) {res.statusCode=404;return res.end(JSON.stringify({code:'42P01',message:'missing duty_settings'}));}
+  result=req.headers.accept?.includes('vnd.pgrst.object')?{referee_points:refereePoints}:[{referee_points:refereePoints}];
  }
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
@@ -224,7 +235,8 @@ try {
  }
  await expectRedirect('/beheer',cookieA,'/');
  await expectRedirect('/beheer/instellingen/huisstijl',cookieA,'/');
- for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
+ await expectRedirect('/beheer/instellingen/diensten',cookieA,'/');
+ for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
  await expectRedirect('/',null,'/login');
  // A forged member ID in the cookie must not be trusted or reach the database.
  const forgedCookie=cookieA.split('; ').map(part=>{
@@ -563,7 +575,28 @@ try {
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(refereeQualifications.get(memberA),'R2.2');
  await adminPage.reload();assert.equal(await memberForm.getByLabel('Scheidsrechtersniveau',{exact:true}).inputValue(),'R2.2');
+ // Defaults are saved once, while existing services keep their own points.
+ await adminPage.goto(base+'/beheer/instellingen');
+ await adminPage.getByRole('link',{name:/Diensten Standaardpunten/}).click();
+ await adminPage.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).fill('3.25');
+ await adminPage.getByRole('button',{name:'Punten opslaan',exact:true}).click();
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await adminPage.reload();assert.equal(await adminPage.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).inputValue(),'3.25');
+ assert.equal(testDuty.points,2);
  await adminPage.goto(base+'/beheer/planning');
+ const reservation=adminPage.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');
+ await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await adminPage.reload();assert.equal(await reservation.getByLabel('Toewijzen aan team',{exact:true}).inputValue(),teamId);
+ if(process.env.SCREENSHOT_DIR) {
+  for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamreservering-planning-${width}.png`,fullPage:true});}
+  await adminPage.setViewportSize({width:1280,height:950});
+ }
+ await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(testDuty.assigned_team_id,null);
  const generalDuty=adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).locator('xpath=ancestor::form');
  const futureDate=new Date(Date.now()+86400000).toISOString().slice(0,10);
  await generalDuty.getByLabel('Titel',{exact:true}).fill('Lokale testfluitdienst');
@@ -575,7 +608,13 @@ try {
  assert.equal(await generalDuty.evaluate(form=>form.reportValidity()),true);
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),generalDuty.getByRole('button',{name:'Diensten aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(authWrites.filter(r=>r.path.endsWith('/create_qualified_duty')).at(-1).body.p_qualification,'V4');
+ const creation=authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body;
+ assert.equal(creation.p_qualification,'V4');assert.equal(creation.p_points,undefined);
+ assert.equal(await generalDuty.locator('input[name=points]').count(),0);
+ dutySettingsMissing=true;await adminPage.goto(base+'/beheer/instellingen/diensten');
+ await adminPage.getByText('Voer migratie 008_team_duties_and_referee_defaults.sql uit in de database van deze app.',{exact:true}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Punten opslaan',exact:true}).isDisabled(),true);
+ dutySettingsMissing=false;
  // Team competition persists, and a match requirement is derived with no manual override.
  testTeams=[{id:teamId,name:'AVV Keistad HS 4',age_class:'senior',competition_level:'Derde klasse'}];
  await adminPage.goto(base+'/beheer/teams');
@@ -600,11 +639,22 @@ try {
  const matchDuty=adminPage.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
  await matchDuty.getByText('Vereist scheidsrechtersniveau: V4 of hoger (automatisch).',{exact:true}).waitFor();
  assert.equal(await matchDuty.locator('select[name=qualification]').count(),0);
- await matchDuty.getByLabel('Punten',{exact:true}).fill('2');
- await matchDuty.getByLabel('Geplande duur (minuten)',{exact:true}).fill('90');
+ assert.equal(await matchDuty.locator('input[name=points],input[name=minutes]').count(),0);
+ await matchDuty.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(authWrites.filter(r=>r.path.endsWith('/create_automatic_match_duty')).at(-1).body.p_qualification,undefined);
+ assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/create_team_match_duty')).at(-1).body,{p_match:testMatch.id,p_team:teamId});
+ await adminPage.getByRole('link',{name:'Fluitdienst bekijken',exact:true}).waitFor();
+ assert.equal(testMatch.referee_duties[0].points,3.25);
+ if(process.env.SCREENSHOT_DIR) {
+  for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamreservering-wedstrijd-${width}.png`,fullPage:true});}
+  await adminPage.setViewportSize({width:1280,height:950});
+ }
+ const matchTeamForm=adminPage.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');
+ await matchTeamForm.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/wedstrijden'),matchTeamForm.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
+ await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(testMatch.referee_duties[0].assigned_team_id,null);
  testMatch.referee_duties=[];testMatch.home_team='AVV Keistad HS 99';
  await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).click();
@@ -752,12 +802,12 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [320,390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
      const largeCorners=await adminPage.locator('.panel,.button,input:not([type=checkbox]),select,.badge,.table-wrap,.duty-card,.nav-link').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&parseFloat(getComputedStyle(el).borderTopLeftRadius)>4).map(el=>el.className));
      assert.deepEqual(largeCorners,[],`Unexpected radius ${width} ${path}`);
-     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
@@ -809,6 +859,31 @@ try {
  assert.equal(await mobileMatches.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);await mobileMatches.getByText('Proglass/AVV Keistad DS 2',{exact:true}).waitFor();
  await manageTouch.getByRole('button',{name:'Filters tonen',exact:true}).tap();await manageTouch.getByLabel('Status',{exact:true}).selectOption('scheduled');
  await manageTouch.getByRole('button',{name:'Filteren',exact:true}).tap();await manageTouch.waitForURL(url=>url.searchParams.get('status')==='scheduled');
+ // Team assignment and default-based match creation also work through touch.
+ const previousMatch={...testMatch},wasCancelled=testDuty.cancelled;
+ testDuty.cancelled=false;
+ await manageTouch.goto(base+'/beheer/planning');
+ const touchTeam=manageTouch.getByRole('button',{name:'Team opslaan',exact:true}).first().locator('xpath=ancestor::form');
+ await touchTeam.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ await Promise.all([manageTouch.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),touchTeam.getByRole('button',{name:'Team opslaan',exact:true}).tap()]);
+ await manageTouch.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();assert.equal(testDuty.assigned_team_id,teamId);
+ await manageTouch.goto(base+'/beheer/instellingen/diensten');
+ await manageTouch.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).fill('3.5');
+ await manageTouch.getByRole('button',{name:'Punten opslaan',exact:true}).tap();
+ await manageTouch.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await manageTouch.reload();assert.equal(await manageTouch.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).inputValue(),'3.5');
+ matchFilterFixtures=null;Object.assign(testMatch,{home_team:'AVV Keistad HS 4',away_team:'Andere testclub HS 1',starts_at:new Date(Date.now()+2*86400000).toISOString(),status:'scheduled',cancelled:false,referee_duties:[]});
+ await manageTouch.goto(base+'/beheer/wedstrijden');
+ await manageTouch.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).tap();
+ const touchMatch=manageTouch.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
+ assert.equal(await touchMatch.locator('input[name=points],input[name=minutes]').count(),0);
+ await touchMatch.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ await Promise.all([manageTouch.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/wedstrijden'),touchMatch.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).tap()]);
+ await manageTouch.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(testMatch.referee_duties[0].points,3.5);assert.equal(testMatch.referee_duties[0].assigned_team_id,teamId);
+ assert.equal(await manageTouch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ if(screenshots) await manageTouch.screenshot({path:`${screenshots}/teamreservering-touch-390.png`,fullPage:true});
+ Object.assign(testMatch,previousMatch);testDuty.cancelled=wasCancelled;testDuty.assigned_team_id=null;
  await manageTouch.goto(base+'/beheer/instellingen/huisstijl');const accentBefore=brand.accent_color;await manageTouch.getByLabel('Accentkleur',{exact:true}).fill('#123456');
  const saveOnPhone=manageTouch.getByRole('button',{name:'Huisstijl opslaan',exact:true});await saveOnPhone.scrollIntoViewIfNeeded();const saveBounds=await saveOnPhone.boundingBox(),barBounds=await manageTouch.locator('.mobile-navigation').boundingBox();
  assert.ok(saveBounds&&barBounds&&saveBounds.y+saveBounds.height<=barBounds.y,'Save remains above the bottom navigation');
@@ -818,7 +893,7 @@ try {
  await manageTouch.locator('main form button[aria-busy="false"]').waitFor();await manageTouch.waitForLoadState('networkidle');
  if(screenshots) await manageTouch.screenshot({path:`${screenshots}/huisstijl-touch-390.png`,fullPage:true});
  await mobileAdmin.close();matchFilterFixtures=null;
- console.log('Mobiele bediening geslaagd: echte touchinschrijving, vaste hoofdnavigatie, menu/Escape, filterbediening, leden/wedstrijdkaarten zonder zijwaarts scrollen, 16px invoer, veilige ankers en huisstijl opslaan boven de onderbalk. Alleen lokale testgegevens.');
+ console.log('Mobiele bediening geslaagd: echte touchinschrijving, vaste hoofdnavigatie, menu/Escape, filterbediening, leden/wedstrijdkaarten zonder zijwaarts scrollen, 16px invoer, veilige ankers, teamtoewijzing, standaardpunten, wedstrijdfluitdienst zonder punten-/duurinvoer en huisstijl opslaan boven de onderbalk. Alleen lokale testgegevens.');
  console.log('Designcontrole geslaagd: huisstijlpreview, opslaan/herladen/reset, member-toegangsbeperking, bevestigingsdialoog, mobiele navigatie en overflow op 320/390/768/1440 px. Alleen testfixtures.');
  console.log('Auth-integratie geslaagd: admin inloggen/beheer, onjuiste credentials, herstelmail zonder accountonthulling, standaard- en token-hash-herstellinks, wachtwoord wijzigen en opnieuw inloggen met exacte wachtwoordtekens. Geen echte e-mails verstuurd.');
  console.log(`Performance-integratie geslaagd: dashboard 9 API-requests (${dashboard.ms}ms), wedstrijden 7 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);

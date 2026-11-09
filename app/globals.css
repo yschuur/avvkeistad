@@ -520,3 +520,20 @@ input[aria-invalid=true] { border-color: var(--danger); }
  .branding-savebar .form-actions .button { padding: var(--space-2); font-size: 12px; }
  .branding-savebar .field-help { font-size: 11px; }
 }
+
+.team-assignment-form { display: flex; align-items: flex-end; gap: var(--space-2); flex-wrap: wrap; min-width: 0; }
+.team-assignment-field { display: grid; align-content: start; gap: var(--space-1); min-width: 0; flex: 1; }
+.team-assignment-field select { width: 100%; max-width: none; min-width: 0; }
+.table-actions .team-assignment-form { max-width: 280px; white-space: normal; }
+.team-assignment-form .button { flex-shrink: 0; }
+.planning-duty-row { flex-wrap: wrap; align-items: flex-end; }
+.planning-duty-row > span { flex-basis: 100%; }
+.planning-duty-row .text-button { white-space: nowrap; }
+.planning-duty-row > .team-assignment-form { align-items: flex-end; flex: 1 1 260px; max-width: 440px; }
+.duty-settings-form { max-width: 360px; }
+@media (max-width: 768px) {
+ .correction-row > .team-assignment-form, .table-actions .team-assignment-form { width: 100%; max-width: none; flex: auto; flex-direction: column; align-items: stretch; }
+ .team-assignment-field, .team-assignment-field select, .team-assignment-form .button { width: 100%; max-width: none; }
+ .planning-duty-row { align-items: stretch; }
+ .planning-duty-row > span { flex-basis: auto; }
+}

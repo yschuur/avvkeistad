@@ -154,3 +154,9 @@ Het ledenstartscherm bevat drie puntenwaarden (Behaald, Ingepland, Nog te behale
 ## Mobiele huisstijlbediening
 
 Naam/logo/kleuren blijven één formulier. Op mobiel staat een compacte vaste opslaabalk boven de hoofdnavigatie, met status over niet-opgeslagen wijzigingen. De inhoud krijgt voldoende onderruimte zodat geen veld of previewtekst blijvend bedekt wordt. Voorbeeld bekijken en Terug naar bewerken springen naar benoemde ankers. Herstellen blijft beperkt tot kleuren. Een uploadfout blijft zichtbaar en gebruikt Nederlandse tekst. De mobiele controles gebruiken ook touch-emulatie voor inschrijven, filters, bewerken, navigatie en bewaren/herladen; alleen een overflowcontrole is onvoldoende.
+
+## Teamreserveringen en dienstinstellingen
+
+Beheer toont bij elke dienst de verantwoordelijke teamnaam of ‘Open voor alle teams’. Een gelabelde teamkeuze met **Team opslaan** wijzigt een toekomstige open dienst; bij een gekoppelde wedstrijd staat dezelfde bediening in de scheidsrechterkolom. De gedeelde `TeamDutyAssignment` gebruikt bestaande tokens en formuliercomponenten; op mobiel staan label, select en knop onder elkaar over de beschikbare breedte. De aanvoerder verdeelt de reservering vervolgens via Mijn team; er wordt geen fictieve inschrijving of teamcredit getoond.
+
+**Instellingen → Diensten** bevat één zichtbaar gelabeld puntenveld met opslagactie. Algemene fluitdiensten en wedstrijdfluitdiensten gebruiken de actuele opgeslagen standaardpunten, zonder een puntenveld bij de aanmaak. De wedstrijdaanmaak heeft alleen een optionele teamkeuze; begin, locatie, duur en vereiste bevoegdheid worden door de bestaande regels bepaald. De tekst toont de opgeslagen standaard en licht toe dat bestaande diensten hun punten behouden. Bij ontbrekende migratie 008 is de nieuwe bediening uitgeschakeld met een functionele uitleg.

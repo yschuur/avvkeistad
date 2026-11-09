@@ -82,14 +82,14 @@ export async function createDuty(f: FormData) {
     const start = fromZonedTime(text(f, 'start'), 'Europe/Amsterdam');
     const end = fromZonedTime(text(f, 'end'), 'Europe/Amsterdam');
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) throw new Error('Controleer de begin- en eindtijd.');
-    const { error } = await db.rpc('create_qualified_duty', {
+    const { error } = await db.rpc('create_default_duty', {
       p_season: id.parse(f.get('season_id')), p_title: z.string().min(1).max(200).parse(text(f, 'title')),
       p_kind: z.enum(['bar','referee','event','lines']).parse(f.get('kind')), p_start: start.toISOString(), p_end: end.toISOString(),
       p_location: z.string().min(1).parse(text(f, 'location')), p_capacity: z.number().int().min(1).max(100).parse(number(f.get('capacity'))),
-      p_points: z.number().positive().parse(number(f.get('points'))), p_qualification: f.get('kind')==='referee'?refereeLevelSchema.parse(text(f,'qualification')):null,
+      p_qualification: f.get('kind')==='referee'?refereeLevelSchema.parse(text(f,'qualification')):null,
       p_team: f.get('team_id') ? id.parse(f.get('team_id')) : null, p_repeat: z.number().int().min(1).max(53).parse(number(f.get('repeat'))),
     });
-    if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
+    if (error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om de nieuwe dienstinstellingen te gebruiken.':error.message);
   });
 }
 export async function saveSeason(_previous:SeasonFormState,f:FormData):Promise<SeasonFormState> {
@@ -193,10 +193,9 @@ export async function markNotificationRead(f:FormData) {
 }
 export async function createMatchDuty(f:FormData) {
  await run('/beheer/wedstrijden',async()=>{
-  const {db}=await manager();const {error}=await db.rpc('create_automatic_match_duty',{
-   p_match:id.parse(f.get('match_id')),p_points:z.number().positive().parse(number(f.get('points'))),
-   p_minutes:z.number().int().min(15).max(480).parse(number(f.get('minutes'))),
-  });if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
+  const {db}=await manager();const {error}=await db.rpc('create_team_match_duty',{
+   p_match:id.parse(f.get('match_id')),p_team:text(f,'team_id')?id.parse(f.get('team_id')):null,
+  });if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om wedstrijden met standaardpunten toe te wijzen.':error.message);
  });
 }
 
@@ -241,5 +240,20 @@ export async function updateTeamCompetition(f:FormData) {
  await run('/beheer/teams',async()=>{
   const {db}=await manager();const {error}=await db.rpc('update_team_competition',{p_team:id.parse(f.get('team_id')),p_competition:competitionLevelSchema.parse(text(f,'competition'))});
   if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
+ });
+}
+
+export async function assignDutyTeam(f:FormData) {
+ const target=text(f,'return_to')==='/beheer/wedstrijden'?'/beheer/wedstrijden':'/beheer/planning';
+ await run(target,async()=>{
+  const {db}=await manager();const {error}=await db.rpc('assign_duty_team',{p_duty:id.parse(f.get('duty_id')),p_team:text(f,'team_id')?id.parse(f.get('team_id')):null});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om teams toe te wijzen.':error.message);
+ });
+}
+export async function saveDutySettings(f:FormData) {
+ await run('/beheer/instellingen/diensten',async()=>{
+  const {db}=await manager();const points=z.number().min(0.25).max(1000).multipleOf(0.25).parse(number(f.get('referee_points')));
+  const {error}=await db.rpc('save_duty_settings',{p_referee_points:points});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om standaardpunten op te slaan.':error.message);
  });
 }
