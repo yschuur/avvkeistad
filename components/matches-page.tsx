@@ -8,7 +8,7 @@ import { createMatchDuty,syncNevobo,testMatchNotifications } from '@/app/actions
 import { mailConfig } from '@/lib/nevobo/mail';
 import { NEVOBO_PROGRAM_URL,canRegisterForMatch } from '@/lib/nevobo/types';
 import { matchFilters,selectMatches,matchFilterUrl as filterUrl,displayMatchStatus,matchFilterStatusLabels,matchLocationValue,matchLocationLabel } from '@/lib/match-filters';
-import { matchRefereeRequirement,clubRefereeRequired } from '@/lib/competition-rules';
+import { matchRefereeRequirement,clubRefereeRequired,keistadTeamKey } from '@/lib/competition-rules';
 function safeSource(value:string|null|undefined) {
  if(!value) return null;
  try {const u=new URL(value);return u.protocol==='https:' && ['nevobo.nl','www.nevobo.nl','api.nevobo.nl','volleybal.nl','www.volleybal.nl'].includes(u.hostname)?u.href:null;}catch{return null;}
@@ -19,9 +19,10 @@ export default async function MatchesPage({searchParams,management=false}:{searc
  const base=management?'/beheer/wedstrijden':'/wedstrijden';
  const matchFilterUrl=(filters:ReturnType<typeof matchFilters>,options:Parameters<typeof filterUrl>[1]={})=>filterUrl(filters,options,base);
  const filters=matchFilters(params),{view}=filters;
- const matches=selectMatches(data.matches,filters,now);
- const teams=[...new Set(data.matches.flatMap(m=>[m.home_team,m.away_team]))].sort((a,b)=>a.localeCompare(b,'nl',{numeric:true}));
- const locations=[...new Map(data.matches.map(m=>[matchLocationValue(m),matchLocationLabel(m)])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'nl'));
+ const source=management?data.matches.filter(m=>keistadTeamKey(m.home_team)!==null):data.matches;
+ const matches=selectMatches(source,filters,now);
+ const teams=[...new Set(source.flatMap(m=>[m.home_team,m.away_team]))].sort((a,b)=>a.localeCompare(b,'nl',{numeric:true}));
+ const locations=[...new Map(source.map(m=>[matchLocationValue(m),matchLocationLabel(m)])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'nl'));
  const hasFilters=Boolean(filters.day||filters.team||filters.location||filters.status||filters.match);
  const pageCount=Math.max(1,Math.ceil(matches.length/50));
  const requested=Number.parseInt(params.page ?? '1',10);
@@ -30,7 +31,7 @@ export default async function MatchesPage({searchParams,management=false}:{searc
  const pageUrl=(target:number)=>matchFilterUrl(filters,{page:target});
  const sync=data.syncState;
  const stale=sync?.last_success_at && now.getTime()-new Date(sync.last_success_at).getTime()>5*3600000;
- return <Shell data={data}><Heading title="Wedstrijden">{manager && <Link className="button secondary" href={`${base}/log`}>Wijzigingslog</Link>}{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>
+ return <Shell data={data}><Heading title="Wedstrijden" description={management?'Thuiswedstrijden van AVV Keistad':undefined}>{manager && <Link className="button secondary" href={`${base}/log`}>Wijzigingslog</Link>}{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>
   <div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
   {(stale || (manager && sync?.last_error_code)) && <p className="notice warning" role="alert">De wedstrijdgegevens zijn mogelijk verouderd. De laatste automatische synchronisatie moet worden gecontroleerd.</p>}
   <div className="filter-bar"><div className="tabs"><Link href={matchFilterUrl(filters,{view:'upcoming'})} className={view==='upcoming'?'selected':''} aria-current={view==='upcoming'?'page':undefined}>Programma</Link><Link href={matchFilterUrl(filters,{view:'history'})} className={view==='history'?'selected':''} aria-current={view==='history'?'page':undefined}>Historie</Link><Link href={matchFilterUrl(filters,{view:'all'})} className={view==='all'?'selected':''} aria-current={view==='all'?'page':undefined}>Alle wedstrijden</Link>{filters.match && <Link href={matchFilterUrl(filters,{clearMatch:true})}>Selectie wissen</Link>}</div><span className="muted small" role="status">{matches.length} {matches.length===1?'wedstrijd':'wedstrijden'} · Nederlandse tijd</span></div>

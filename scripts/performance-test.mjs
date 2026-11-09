@@ -595,6 +595,39 @@ try {
  testMatch.home_team='Test thuis';
  await page.goto(base+'/beheer/teams');await page.waitForURL(base+'/');
  console.log('Competitieregels browser: competitieniveau opslaan/herladen, geen clubdienst vanaf promotieklasse, automatisch V4 daaronder, geen handmatige verlaging, onbekend team geblokkeerd en ledenafscherming. Alleen lokale testgegevens.');
+ // Management shows home teams, regardless of venue or caller-supplied filters.
+ const homeBase={...testMatch,starts_at:'2090-06-02T12:00:00Z',home_team:'AVV Keistad MA 2',away_team:'Tegenstander MA 1',location:'Sportcomplex Amerena',city:'Amersfoort',status:'scheduled',cancelled:false};
+ const awayBase={...homeBase,home_team:'Alleen uit-tegenstander MA 1',away_team:'AVV Keistad MA 2',location:'Alleen uit-locatie'};
+ matchFilterFixtures=[
+  ...Array.from({length:51},(_,index)=>({...awayBase,id:'scope-away-'+index,location:index===0?'Sportcomplex Amerena':awayBase.location})),
+  ...Array.from({length:51},(_,index)=>({...homeBase,id:'scope-home-'+index})),
+  {...homeBase,id:'scope-sponsor',home_team:'Proglass/AVV Keistad DS 2'},
+  {...homeBase,id:'scope-internal',home_team:'AVV Keistad L3 8',away_team:'AVV Keistad L3 5'},
+  {...homeBase,id:'scope-history',starts_at:'2020-06-02T12:00:00Z'},
+  {...awayBase,id:'scope-away-history',starts_at:'2020-06-02T12:00:00Z'},
+  {...homeBase,id:'scope-cancelled',status:'cancelled'},
+ ];
+ const managedRows=adminPage.locator('.table-wrap tbody tr'),managedFilters=adminPage.getByRole('form',{name:'Wedstrijden filteren'});
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all');
+ await adminPage.getByRole('status').filter({hasText:/^55 wedstrijden/}).waitFor();assert.equal(await managedRows.count(),50);
+ assert.equal(await managedRows.getByText(awayBase.home_team,{exact:true}).count(),0);
+ assert.ok(!(await managedFilters.getByLabel('Locatie',{exact:true}).locator('option').allTextContents()).some(text=>text.includes(awayBase.location)));
+ assert.ok(!(await managedFilters.getByLabel('Team',{exact:true}).locator('option').allTextContents()).includes(awayBase.home_team));
+ await adminPage.getByRole('link',{name:'Volgende',exact:true}).click();await adminPage.getByText('Pagina 2 van 2',{exact:true}).waitFor();assert.equal(await managedRows.count(),5);
+ await managedRows.getByText('Proglass/AVV Keistad DS 2',{exact:true}).waitFor();await managedRows.getByText('AVV Keistad L3 8',{exact:true}).waitFor();
+ await adminPage.getByRole('link',{name:'Historie',exact:true}).click();await adminPage.getByRole('status').filter({hasText:/^1 wedstrijd ·/}).waitFor();
+ assert.equal(await managedRows.getByText(awayBase.home_team,{exact:true}).count(),0);
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all&status=cancelled');await adminPage.getByRole('status').filter({hasText:/^1 wedstrijd ·/}).waitFor();
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all&match=scope-away-0');await adminPage.getByText('Geen wedstrijden in deze selectie.',{exact:true}).waitFor();
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all&team='+encodeURIComponent(awayBase.home_team));await adminPage.getByText('Geen wedstrijden in deze selectie.',{exact:true}).waitFor();
+ // Clearing filters and manager access cannot bring an away match back.
+ await adminPage.getByRole('link',{name:'Filters wissen',exact:true}).click();await adminPage.getByRole('status').filter({hasText:/^55 wedstrijden/}).waitFor();
+ adminRole='manager';await adminPage.goto(base+'/beheer/wedstrijden');await adminPage.getByRole('status').filter({hasText:/^54 wedstrijden/}).waitFor();adminRole='admin';
+ await page.goto(base+'/wedstrijden?view=all&match=scope-away-0');await page.locator('.table-wrap tbody').getByText(awayBase.home_team,{exact:true}).waitFor();
+ await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/beheer/wedstrijden?view=all');
+ assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await adminPage.setViewportSize({width:1280,height:950});matchFilterFixtures=null;
+ console.log('Thuiswedstrijdbeheer geslaagd: sponsor/interne teams, thuisteam ongeacht locatie, alle tabs, filters/wissen, directe wedstrijd-ID, aantallen/paginering, manager en mobiel. Volledig bronprogramma behouden. Alleen lokale testgegevens.');
  // The member view compares the new codes rather than old numbers.
  hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
  await page.goto(base+'/diensten');
@@ -654,7 +687,9 @@ try {
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2030783').status,'cancelled');
  assert.equal(applied.p_matches.find(m=>m.external_id==='nevobo:2084600').status,'missing');
  await adminPage.goto(base+'/beheer/wedstrijden?view=all');
- await adminPage.getByRole('region',{name:'Wedstrijdprogramma'}).getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
+ await adminPage.getByText('Geen wedstrijden in deze selectie.',{exact:true}).waitFor();
+ await page.goto(base+'/wedstrijden?view=all');
+ await page.getByRole('region',{name:'Wedstrijdprogramma'}).getByText('A.G.A.V.S. - Soesterberg MA 1',{exact:true}).waitFor();
  programXml=actualProgram;
  await adminPage.goto(base+'/beheer/wedstrijden?view=all');
  await adminPage.getByRole('button',{name:'Testmelding naar mij'}).click();
