@@ -531,7 +531,7 @@ try {
  // Restore fixture identity; a missing 007 keeps the older two-colour editor working.
  await adminPage.getByLabel('Verenigingsnaam',{exact:true}).fill('AVV Keistad');await adminPage.getByRole('button',{name:'Logo verwijderen'}).click();
  identityMigrationMissing=true;await saveIdentity();
- await adminPage.getByRole('alert').filter({hasText:'Voer migratie 007_club_identity.sql'}).waitFor();
+ await adminPage.getByRole('alert').filter({hasText:'De database-API levert nog alleen de oude kleurvelden'}).waitFor();
  assert.equal(await adminPage.getByLabel('Verenigingsnaam',{exact:true}).isDisabled(),true);
  assert.equal(await adminPage.getByLabel('Accentkleur',{exact:true}).isDisabled(),true);
  await adminPage.getByLabel('Primaire kleur',{exact:true}).fill('#123456');
