@@ -17,12 +17,12 @@ test('cron vereist de exacte server-token; ontbrekende configuratie is geen toeg
 });
 test('wijzigingsmail heeft een stabiele idempotentiesleutel en bevat de werkelijke melding',async()=>{
  assert.equal(mailConfig({}),null);
- const config={key:'local-test-key',from:'club@example.test',siteUrl:'https://app.example.test'};
+ const config={key:'local-test-key',from:'club@example.test',siteUrl:'https://app.example.test',clubName:'Lokale testvereniging'};
  const job={outbox_id:'test-outbox',claim:'test-claim',recipient:'referee@example.test',subject:'Wedstrijd gewijzigd',body:'Testwedstrijd. Nieuwe planning: 08-11-2026 14:00.',notification_id:'test-notification'};
  const calls:RequestInit[]=[];
  const fetcher:typeof fetch=async(_url,options)=>{calls.push(options!);return new Response(JSON.stringify({id:'local-provider-id'}),{status:200});};
  const result=await sendMatchEmail(job,config,fetcher);assert.deepEqual(result,{sent:true,providerId:'local-provider-id'});
  const headers=calls[0].headers as Record<string,string>;assert.equal(headers['Idempotency-Key'],'nevobo-test-notification');
- const payload=JSON.parse(String(calls[0].body));assert.match(payload.text,/08-11-2026 14:00/);assert.match(payload.text,/https:\/\/app.example.test\/meldingen/);
+ const payload=JSON.parse(String(calls[0].body));assert.equal(payload.from,'"Lokale testvereniging" <club@example.test>');assert.equal(payload.subject,'Lokale testvereniging · Wedstrijd gewijzigd');assert.match(payload.text,/vrijwilligersportaal van Lokale testvereniging/);assert.match(payload.text,/08-11-2026 14:00/);assert.match(payload.text,/https:\/\/app.example.test\/meldingen/);
  assert.deepEqual(await sendMatchEmail(job,config,async()=>new Response('{}',{status:429})),{sent:false,code:'provider_http_429'});
 });

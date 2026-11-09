@@ -1,6 +1,6 @@
-# AVV Keistad — designsysteem
+# Vrijwilligersportaal — designsysteem
 
-Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting is geïnspireerd op de informatiedichtheid en rust van Linear, zonder de interface te kopiëren.
+Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting is Friendly Club Portal met de informatiedichtheid en rust van Linear. Leden krijgen toegankelijke kaarten; beheer krijgt compacte tabellen en formulieren.
 
 ## Principes
 
@@ -28,7 +28,8 @@ De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens 
 | Secundaire tekst | `--text-muted` | #656b76 |
 | Primaire clubkleur | `--brand-primary` | Database, standaard #087d56 uit de bestaande app |
 | Secundaire clubkleur | `--brand-secondary` | Database, standaard #6483b8 uit de bestaande app |
-| Primaire actie | `--accent`, `--on-accent` | Clubkleur en automatisch zwart/wit met minimaal 4,5:1 contrast |
+| Accentkleur / primaire actie | `--brand-accent`, `--accent`, `--on-accent` | Onafhankelijk opgeslagen accent en automatisch zwart/wit met minimaal 4,5:1 contrast |
+| Behaalde voortgang | `--progress-earned` | Van accent afgeleid, zo nodig donkerder voor contrast |
 | Actieve tekst / selectie | `--accent-text`, `--accent-subtle` | Afgeleid van primaire kleur; minimaal 4,5:1 tekstcontrast |
 | Ingeplande voortgang | `--secondary-text` | Secundaire kleur, zo nodig donkerder voor contrast |
 | Succes | `--success`, `--success-bg` | #24613f / #eff6f1 |
@@ -39,14 +40,14 @@ De defaults zijn applicatiekleuren, geen claim over een officiële clubhuisstijl
 
 Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 13px / 1,5; paginatitel 22px / 1,3, sectietitel 14px / 1,4, tabel en labels 12px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
 
-Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: 4px voor badges, 6px voor bediening, 8px voor panelen/dialogs. Borders 1px. Geen schaduw op kaarten, tabellen of knoppen; uitsluitend een kleine schaduw op een overlay die boven inhoud ligt. Sidebar 224px; hoofdinhoud maximaal 1440px.
+Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` en `--radius` 2px; `--radius-lg` 4px uitsluitend voor dialogen. Kaarten, panelen, badges, knoppen, velden, tabellen en navigatie gebruiken 2px. Geen pillvormen; alleen functionele spinners mogen rond zijn. Borders 1px. Geen schaduw op kaarten, tabellen of knoppen; uitsluitend een kleine schaduw op een overlay die boven inhoud ligt. Sidebar 224px; hoofdinhoud maximaal 1440px.
 
 ## Gedeelde componenten
 
-- `Shell`: desktop-sidebar, mobiele menu-button/drawer, clubnaam, huidig seizoen en ingelogd profiel. Mobiele drawer sluit op Escape, backdrop of navigatie en houdt toetsenbordfocus binnen het menu; focus keert terug naar de trigger. Een skiplink gaat naar de hoofdinhoud.
+- `Shell`: desktop-sidebar, mobiele menu-button/drawer, clubnaam, huidig seizoen en ingelogd profiel. De mobiele ledenmenuknop staat vast rechtsonder voor bediening met één hand; beheer houdt de knop bovenin. De drawer sluit op Escape, backdrop of navigatie en houdt toetsenbordfocus binnen het menu; focus keert terug naar de trigger. Een skiplink gaat naar de hoofdinhoud.
 - `Nav`: actieve pagina met `aria-current`, iconen van 16px, leesbare labels op mobiel en directe feedback tijdens navigatie. Leden- en beheernavigatie hebben elk hun eigen menu; uitsluitend admin/manager krijgt de omgevingsschakelaar.
 - `Heading`: één korte h1, optionele nuttige toelichting en rechts de relevante primaire actie. Geen eyebrow of standaardbeschrijving op elke pagina.
-- `DutyCard`: bestaande export blijft behouden, maar rendert een compacte lijstregel met datum, dienst, type, locatie, bezetting, punten en bestaande inschrijf-/overnameacties. Mobiel stapelt dezelfde informatie.
+- `DutyCard`: dezelfde gegevens en acties in twee presentaties. Leden zien witte kaarten met duidelijke dienstnaam, datum, locatie, bezetting, punten en inschrijf-/overnameknop; beheer gebruikt compacte regels. De eerstvolgende eigen dienst krijgt een compacte brede kaart. Op mobiel is de inschrijfknop over de volle kaartbreedte bereikbaar.
 - `SubmitButton`: spinner en disabled tijdens serveractie, bestaande actie/naam/waarde blijven intact. Standaard één primaire actie per formulier. Secundaire acties zijn neutraal; destructieve acties hebben een rood tekstaccent.
 - `ConfirmSubmitButton`: gebruikt een native dialog voor bestaande destructieve acties. Annuleren en Escape muteren niets; bevestigen verstuurt het oorspronkelijke formulier inclusief submitter. Geen nieuwe businessactie.
 - Tabellen: compacte rijen, subtiele header, hover, links uitgelijnde tekst en herkenbare numerieke kolommen. Geen kaart rond iedere rij. Tabelwrapper mag uitsluitend bij echte tabellen horizontaal scrollen; de pagina zelf nooit. De wrapper is focusbaar en heeft een toegankelijke naam.
@@ -55,7 +56,7 @@ Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: 4p
 - `Notice`: `role=alert` voor fouten, `role=status` voor resultaat. Kleur wordt altijd ondersteund door tekst. Geen automatische verdwijning van foutmeldingen.
 - Empty states: één korte tekst en uitsluitend een bruikbare actie; geen illustraties.
 - Loading: vaste compacte skeletonregels en status ‘Pagina laden…’. Alleen functionele spinneranimatie; `prefers-reduced-motion` schakelt animatie uit.
-- Huisstijl: color picker en HEX-invoer delen één waarde, alleen `#RRGGBB` is geldig. Preview gebruikt dezelfde tokens als de applicatie. Wijzigingen zijn lokaal tot Opslaan. Standaardkleuren herstellen zet de invoer terug; daarna expliciet opslaan. De server en database controleren invoer én beheerrechten.
+- Huisstijl: verenigingsnaam, rasterlogo en drie onafhankelijke kleuren. Color picker en HEX-invoer delen één waarde; alleen `#RRGGBB` is geldig. Preview toont naam/logo, navigatie, knoppen, kaart en voortgang met dezelfde tokens als de applicatie. Wijzigingen blijven lokaal tot Opslaan. Standaardkleuren herstellen behoudt naam en logo; daarna expliciet opslaan. PNG/JPEG/WebP, maximaal 256 KB; de upload controleert ook maximaal 4096 × 4096 pixels. SVG en externe URL’s zijn niet toegestaan. De server en database controleren inhoud, omvang en beheerrechten.
 
 ## Responsive en toegankelijkheid
 
@@ -77,7 +78,7 @@ Wel: nieuwe UI met bestaande tokens, gedeelde componenten en bijgewerkte documen
 
 ## Verificatie
 
-`npm run build` controleert productiebuild en TypeScript. `npm test` omvat de bestaande businessregels plus merkcontrast/validatie en de echte huisstijlmigratie met RLS/autorisatie. `npm run test:browser` gebruikt uitsluitend een lokale testbackend en controleert navigatie, authenticatie/herstel, formulieren, huisstijlpreview/opslag/herladen, mobiele menu-interactie en responsive overflow. Testfixtures komen niet in de productie-app. Productieopslag vereist dat migratie `002_club_branding.sql` is toegepast; zonder migratie blijft de app met standaardkleuren bruikbaar en is opslaan in Huisstijl niet beschikbaar.
+`npm run build` controleert productiebuild en TypeScript. `npm test` omvat de bestaande businessregels plus merkcontrast/validatie en de echte huisstijlmigratie met RLS/autorisatie. `npm run test:browser` gebruikt uitsluitend een lokale testbackend en controleert navigatie, authenticatie/herstel, formulieren, huisstijlpreview/opslag/herladen, mobiele menu-interactie en responsive overflow. Testfixtures komen niet in de productie-app. Volledige productieopslag vereist migratie `007_club_identity.sql`; deze kan na 001 ook zonder 002 worden uitgevoerd. Met uitsluitend 002 blijven de twee bestaande kleuren bewerkbaar, met uitleg over 007. Zonder opslag blijft de app met standaardidentiteit bruikbaar en is Opslaan uitgeschakeld.
 
 ## Wedstrijdwijzigingen en meldingen
 
@@ -130,10 +131,19 @@ Wedstrijdbeheer en wijzigingslog staan onder `/beheer/wedstrijden`; tabs, filter
 
 ## Eenvoudige ledenomgeving
 
-Het ledenstartscherm bevat drie puntenwaarden (Behaald, Ingepland, Nog te behalen) met de ingestelde norm als korte toelichting, maximaal twee komende eigen diensten en maximaal drie passende open diensten. De volledige planning en historie staan bij **Mijn diensten**, met tabs Komend en Afgelopen voor het actieve seizoen. Een ingetrokken of geannuleerde inschrijving blijft herkenbaar in het eigen overzicht en telt daar als nul punten; de startpagina bevat uitsluitend actieve komende inschrijvingen. Afmelden en ter overname aanbieden blijven op de eigen dienst beschikbaar volgens de bestaande termijnen.
+Het ledenstartscherm bevat drie puntenwaarden (Behaald, Ingepland, Nog te behalen) met de ingestelde norm als korte toelichting en een voortgangsbalk, de eerstvolgende eigen dienst en maximaal drie passende open diensten. De volledige planning en historie staan bij **Mijn diensten**, met tabs Komend en Afgelopen voor het actieve seizoen. Een ingetrokken of geannuleerde inschrijving blijft herkenbaar in het eigen overzicht en telt daar als nul punten; de startpagina bevat uitsluitend actieve komende inschrijvingen. Afmelden en ter overname aanbieden blijven op de eigen dienst beschikbaar volgens de bestaande termijnen.
 
 **Open diensten** toont uitsluitend toekomstige, open diensten met vrije plaatsen of een overnameaanbod, waarvoor het lid een teamindeling, voldoende bevoegdheid en een passende planning heeft. Eigen inschrijvingen en reserveringen voor andere teams worden niet als open keuze gepresenteerd. De database blijft dezelfde controles uitvoeren bij daadwerkelijk inschrijven. Het typefilter en een korte toelichting volstaan; geen extra competitie- of beheerinformatie op dit scherm.
 
 **Mijn profiel** toont alleen de gegevens van de ingelogde gebruiker: naam, e-mail, Nevobo-code, eigen team, diploma en eigen puntennorm. De gegevens zijn alleen te bekijken; wijzigingen lopen via beheer. Een uitnodigings-/herstellink opent de bestaande wachtwoordinstelling op deze profielpagina, zodat het dashboard geen accountformulier nodig heeft. Meldingen blijven beschikbaar in de topbar en via het profiel, omdat dienstwijzigingen relevant blijven. Het bondsprogramma en de algemene wedstrijdenpagina staan niet in de ledennavigatie; bestaande directe bronlinks blijven bruikbaar.
 
 **Mijn team** vereist aanvoerderschap in het actieve seizoen, ook wanneer de gebruiker daarnaast beheerrechten heeft. Dit scherm toont uitsluitend de eigen teamstand en teamleden. Open teamdiensten tonen uitsluitend eigen teamleden die beschikbaar zijn en het juiste diploma hebben; volle, gesloten of geannuleerde diensten worden niet ter verdeling aangeboden. Na toewijzen blijft de aanvoerder op Mijn team en wordt de stand opnieuw geladen. Beheer van andere teams blijft in Beheermodus. De bestaande SQL/RLS-rechten wijzigen niet.
+
+
+## Centrale clubidentiteit
+
+`BrandingProvider` levert de publieke clubnaam en het gevalideerde logo aan `ClubIdentity` en `ClubMark`. Sidebar, login, wachtwoordherstel en paginametadata gebruiken dezelfde identiteit; zonder logo worden initialen uit de clubnaam afgeleid. E-mailonderwerp en afzendernaam gebruiken de centraal opgeslagen naam. Statuskleuren blijven onafhankelijk van alle clubkleuren.
+
+`getBranding` leest uitsluitend publieke huisstijlkolommen, met 60 seconden cache en directe invalidatie na opslaan. Alleen naam/logo/kleuren zijn publiek; editor-ID en auditdetails niet. De tabel heeft een stabiele `club_id` en één actieve identiteit (`id=true`), met ruimte voor toekomstige inactieve identiteiten. Dit koppelt nog geen leden of seizoenen aan meerdere verenigingen. Logo’s staan als begrensde data-URL in dezelfde instelling; er is geen extra publieke uploadbucket nodig.
+
+`PointsProgress` toont behaalde en ingeplande punten apart, met tekstlegenda en toegankelijke doel-/waardetekst. Het gevulde deel stopt bij 100%; echte puntenwaarden blijven zichtbaar, ook boven de norm. Ingeplande punten zijn geen behaalde punten. Norm 0 toont een vrijstellingstekst, ontbrekende seizoen-/teamgegevens tonen geen verzonnen voortgang.

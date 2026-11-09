@@ -8,7 +8,7 @@ export default async function BrandSettings({searchParams}:{searchParams:Promise
   const data=await getData('settings');
   const [branding,params]=await Promise.all([getBranding(),searchParams]);
   return <Shell data={data}><div className="breadcrumbs"><Link href="/beheer">Beheer</Link><span>/</span><Link href="/beheer/instellingen">Instellingen</Link><span>/</span><span>Huisstijl</span></div><Heading title="Huisstijl"/><div className="settings-tabs"><span aria-current="page">Huisstijl</span></div><Notice params={params}/>
-    {!branding.available && <p className="notice warning" role="alert">De huisstijlgegevens zijn niet beschikbaar. Opslaan is uitgeschakeld. Controleer of migratie 002_club_branding.sql in Supabase is uitgevoerd en de database bereikbaar is.</p>}
-    <BrandingEditor initial={branding} available={branding.available}/>
+    {!branding.available && <p className="notice warning" role="alert">De huisstijlgegevens zijn niet beschikbaar. Opslaan is uitgeschakeld. Controleer of migratie 007_club_identity.sql in Supabase is uitgevoerd en de database bereikbaar is.</p>}
+    {branding.available&&!branding.identityAvailable&&<p className="notice warning" role="alert">Kleuren aanpassen is beschikbaar. Voer migratie 007_club_identity.sql uit om ook verenigingsnaam, logo en accentkleur in te stellen.</p>}<BrandingEditor initial={branding} available={branding.available} identityAvailable={branding.identityAvailable}/>
   </Shell>;
 }

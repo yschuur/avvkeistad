@@ -1,5 +1,6 @@
 'use client';
 import Link, { useLinkStatus } from 'next/link';
+import { ClubIdentity } from './club-identity';
 import { usePathname } from 'next/navigation';
 import { LayoutDashboard, CalendarDays, Users, Bell, Trophy, SlidersHorizontal, UsersRound, CalendarRange, ListChecks, Award, ChartNoAxesCombined,UserRound,ExternalLink } from 'lucide-react';
 function NavigationStatus() {
@@ -25,7 +26,7 @@ export function WorkspaceLabel() {
  const path=usePathname();return <span>{path==='/beheer'||path.startsWith('/beheer/')?'Beheeromgeving':'Vrijwilligersportaal'}</span>;
 }
 export function BrandLink() {
- const path=usePathname();return <Link href={path==='/beheer'||path.startsWith('/beheer/')?'/beheer':'/'} className="brand"><span className="brand-monogram">K</span><span>AVV Keistad<small>Vrijwilligers</small></span></Link>;
+ const path=usePathname();return <Link href={path==='/beheer'||path.startsWith('/beheer/')?'/beheer':'/'} className="brand"><ClubIdentity/></Link>;
 }
 
 export function WorkspaceHeader({unread}:{unread:number|null}) {

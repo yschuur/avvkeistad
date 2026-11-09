@@ -3,13 +3,13 @@ import { LogOut } from 'lucide-react';
 import { type AppData } from '@/lib/data';
 import { Nav,WorkspaceHeader,BrandLink } from './nav';
 import { ModeSwitch } from './mode-switch';
-import { NavigationFrame } from './navigation-frame';
+import { NavigationFrame,WorkspaceFrame } from './navigation-frame';
 import { logout } from '@/app/actions';
 export function Shell({ data, children }: { data: AppData; children: React.ReactNode }) {
   const management = data.profile.role !== 'member';
   const captain = data.memberships.some(m => m.member_id===data.profile.id && m.captain);
   const role=data.profile.role==='admin'?'Admin':management?'Beheerder':'Lid';
-  return <div className="app-shell"><a href="#main-content" className="skip-link">Naar hoofdinhoud</a>
+  return <WorkspaceFrame><a href="#main-content" className="skip-link">Naar hoofdinhoud</a>
     <NavigationFrame><BrandLink/>
       <div className="season-label">{data.season?.name ?? 'Geen actief seizoen'}</div>
       <Nav management={management} captain={captain} unread={data.unreadNotifications}/>
@@ -17,5 +17,5 @@ export function Shell({ data, children }: { data: AppData; children: React.React
     </NavigationFrame>
     <div className="workspace"><header className="topbar"><WorkspaceHeader unread={data.unreadNotifications}/></header>
     <main id="main-content" tabIndex={-1}>{children}</main></div>
-  </div>;
+  </WorkspaceFrame>;
 }

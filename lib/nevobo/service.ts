@@ -1,5 +1,6 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { importedMatch, type FeedSnapshot } from './types';
+import { getBranding } from '../branding-server';
 import { mailConfig, sendMatchEmail, type EmailJob } from './mail';
 
 export function serviceClient() {
@@ -15,6 +16,7 @@ export async function deliverMatchNotifications(db:SupabaseClient,limit=10) {
  let sent=0,failed=0;
  // Bounded concurrency keeps a batch inside a normal serverless request.
  const jobs=(data ?? []) as EmailJob[];
+ if(jobs.length) config.clubName=(await getBranding()).clubName;
  for(let offset=0;offset<jobs.length;offset+=2) {
  const started=Date.now();
  await Promise.all(jobs.slice(offset,offset+2).map(async job=>{

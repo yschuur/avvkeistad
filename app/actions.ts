@@ -5,7 +5,8 @@ import { createClient } from '@supabase/supabase-js';
 import { fromZonedTime } from 'date-fns-tz';
 import { z } from 'zod';
 import { configured, supabase } from '@/lib/supabase/server';
-import { HEX_COLOR } from '@/lib/branding';
+import { HEX_COLOR,validClubName,validLogoData } from '@/lib/branding';
+import { getBranding } from '@/lib/branding-server';
 import { serviceClient,synchronizeMatches } from '@/lib/nevobo/service';
 import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
 import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
@@ -178,8 +179,11 @@ export async function saveBranding(f: FormData) {
     const color=z.string().length(7).regex(HEX_COLOR);
     const primary=color.parse(text(f,'primaryColor')).toUpperCase();
     const secondary=color.parse(text(f,'secondaryColor')).toUpperCase();
-    const {error}=await db.rpc('save_club_branding',{p_primary:primary,p_secondary:secondary});
-    if(error) throw new Error('De kleuren konden niet worden opgeslagen. Controleer de huisstijlmigratie en je beheerrechten.');
+    const full=text(f,'brandingVersion')==='identity';
+    const name=text(f,'clubName'),logo=text(f,'logoData')||null;
+    if(full&&(!validClubName(name)||!validLogoData(logo))) throw new Error('Controleer de verenigingsnaam en het logo.');
+    const {error}=full?await db.rpc('save_club_identity',{p_name:name,p_logo:logo,p_primary:primary,p_secondary:secondary,p_accent:color.parse(text(f,'accentColor')).toUpperCase()}):await db.rpc('save_club_branding',{p_primary:primary,p_secondary:secondary});
+    if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 007_club_identity.sql uit om de volledige huisstijl op te slaan.':'De huisstijl kon niet worden opgeslagen. Controleer de gegevens en je beheerrechten.');
     updateTag('club-branding');
   });
 }
@@ -220,6 +224,7 @@ export async function testMatchNotifications() {
   const service=serviceClient();
   const {data,error}=await service.from('notifications').insert({member_id:user.id,title:'Testmelding wedstrijdkoppeling',body:'Dit is de door jou aangevraagde testmelding voor de wedstrijdkoppeling.'}).select('id,title,body').single();
   if(error || !data) throw new Error('De testmelding kon niet worden opgeslagen. Controleer migratie 003.');
+  config.clubName=(await getBranding()).clubName;
   const result=await sendMatchEmail({outbox_id:'',claim:'',notification_id:data.id,recipient:recipient.data,subject:data.title,body:data.body},config);
   if(!result.sent) throw new Error('De testmelding staat in de app, maar de mail kon niet worden verstuurd. Controleer het geverifieerde afzenderdomein en de API-sleutel in Resend.');
  });

@@ -1,8 +1,9 @@
 import { z } from 'zod';
+import { DEFAULT_BRANDING,validClubName } from '../branding';
 
 export type EmailJob={outbox_id:string;claim:string;recipient:string;subject:string;body:string;notification_id:string};
 export type MailResult={sent:true;providerId:string}|{sent:false;code:string};
-export type MailConfig={key:string;from:string;siteUrl:string};
+export type MailConfig={key:string;from:string;siteUrl:string;clubName?:string};
 export function mailConfig(env:Record<string,string|undefined>=process.env):MailConfig|null {
   if(!env.RESEND_API_KEY || !env.NOTIFICATION_FROM_EMAIL || !env.NEXT_PUBLIC_SITE_URL) return null;
   if(!z.email().safeParse(env.NOTIFICATION_FROM_EMAIL).success) return null;
@@ -12,11 +13,12 @@ export function mailConfig(env:Record<string,string|undefined>=process.env):Mail
 }
 export async function sendMatchEmail(job:EmailJob,config:MailConfig,fetcher:typeof fetch=fetch):Promise<MailResult> {
   if(!z.email().safeParse(job.recipient).success) return {sent:false,code:'invalid_recipient'};
+  const name=config.clubName&&validClubName(config.clubName)?config.clubName.trim():DEFAULT_BRANDING.clubName;
   try {
     const response=await fetcher('https://api.resend.com/emails',{
       method:'POST',headers:{Authorization:`Bearer ${config.key}`,'Content-Type':'application/json','Idempotency-Key':`nevobo-${job.notification_id}`},
-      body:JSON.stringify({from:`AVV Keistad <${config.from}>`,to:[job.recipient],subject:`AVV Keistad · ${job.subject}`,
-        text:`${job.body}\n\nBekijk je meldingen: ${new URL('/meldingen',config.siteUrl)}\n\nDit bericht is afkomstig van het vrijwilligersportaal van AVV Keistad.`}),
+      body:JSON.stringify({from:`${JSON.stringify(name)} <${config.from}>`,to:[job.recipient],subject:`${name} · ${job.subject}`,
+        text:`${job.body}\n\nBekijk je meldingen: ${new URL('/meldingen',config.siteUrl)}\n\nDit bericht is afkomstig van het vrijwilligersportaal van ${name}.`}),
       signal:AbortSignal.timeout(10000),
     });
     if(!response.ok) return {sent:false,code:`provider_http_${response.status}`};

@@ -23,7 +23,8 @@ let hideTestEnrollment=false,captainA=false;
 let extraDuties=[],extraEnrollments=[];
 const teamAssignments=new Map();
 let adminRole='admin';
-let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
+let brand={club_name:'AVV Keistad',logo_data:null,primary_color:'#087D56',secondary_color:'#6483B8',accent_color:'#087D56'},identityMigrationMissing=false;
+const logoBytes=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aZ1kAAAAASUVORK5CYII=','base64');
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
 let matchFilterFixtures=null;
 const testNotification={id:'80000000-0000-4000-8000-000000000001',member_id:memberA,match_id:testMatch.id,title:'Testwedstrijd gewijzigd',body:'Nieuwe planning in de lokale testomgeving.',created_at:new Date().toISOString(),read_at:null};
@@ -115,7 +116,10 @@ const mock=createServer(async(req,res)=>{
  }
  if(url.pathname==='/rest/v1/rpc/cancel_duty') {testDuty.cancelled=true;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_club_branding') {
-  const input=JSON.parse(body);brand={primary_color:input.p_primary,secondary_color:input.p_secondary};return res.end('null');
+  const input=JSON.parse(body);Object.assign(brand,{primary_color:input.p_primary,secondary_color:input.p_secondary});return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/save_club_identity') {
+  const input=JSON.parse(body);Object.assign(brand,{club_name:input.p_name.trim(),logo_data:input.p_logo,primary_color:input.p_primary,secondary_color:input.p_secondary,accent_color:input.p_accent});return res.end('null');
  }
  if(url.pathname.endsWith('/recover') || url.pathname.endsWith('/logout')) return res.end('{}');
  if(url.pathname.endsWith('/.well-known/jwks.json')) return res.end(JSON.stringify({keys:[jwk]}));
@@ -151,7 +155,10 @@ const mock=createServer(async(req,res)=>{
   const source=matchFilterFixtures ?? [testMatch],from=Number(url.searchParams.get('offset') ?? 0),limit=Number(url.searchParams.get('limit') ?? 500);
   result=source.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${source.length}`:`*/${source.length}`);
  }
- if(url.pathname==='/rest/v1/club_branding') result=[brand];
+ if(url.pathname==='/rest/v1/club_branding') {
+  if(identityMigrationMissing && url.searchParams.get('select').includes('club_name')) {res.statusCode=400;return res.end(JSON.stringify({code:'42703',message:'missing club_name'}));}
+  result=[identityMigrationMissing?{primary_color:brand.primary_color,secondary_color:brand.secondary_color}:brand];
+ }
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
@@ -242,6 +249,15 @@ try {
  const pastId='50000000-0000-4000-8000-000000000002',foreignId='50000000-0000-4000-8000-000000000003';
  extraDuties=[{...testDuty,id:pastId,title:'Eigen afgelopen testdienst',starts_at:new Date(Date.now()-3*86400000).toISOString(),ends_at:new Date(Date.now()-3*86400000+7200000).toISOString(),points:3},{...testDuty,id:foreignId,title:'Dienst van ander lid',starts_at:new Date(Date.now()-4*86400000).toISOString(),ends_at:new Date(Date.now()-4*86400000+7200000).toISOString()}];
  extraEnrollments=[{id:'86000000-0000-4000-8000-000000000002',member_id:memberA,duty_id:pastId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false},{id:'86000000-0000-4000-8000-000000000003',member_id:memberB,duty_id:foreignId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false}];
+ await page.goto(base+'/');
+ assert.equal(await page.getByRole('progressbar',{name:'Behaalde punten'}).getAttribute('aria-valuenow'),'3');
+ assert.equal(await page.getByRole('progressbar',{name:'Behaalde punten'}).getAttribute('aria-valuemax'),'20');
+ assert.match(await page.getByRole('progressbar').getAttribute('aria-valuetext'),/3 van 20 punten behaald, 2 punten ingepland/);
+ if(process.env.SCREENSHOT_DIR) {
+  await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+  for(const width of [390,1440]) {await page.setViewportSize({width,height:950});await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/lid-met-dienst-${width}.png`,fullPage:true});}
+ }
+ await page.setViewportSize({width:1280,height:950});
  await page.goto(base+'/mijn-diensten?view=history&member='+memberB);
  await page.getByRole('heading',{name:'Eigen afgelopen testdienst',exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'Dienst van ander lid',exact:true}).count(),0);
@@ -472,21 +488,53 @@ try {
  await adminPage.waitForURL('**/profiel?password=1');await adminPage.getByRole('heading',{name:'Wachtwoord instellen',exact:true}).waitFor();
  await adminPage.goto(base+'/beheer/instellingen/huisstijl');
  await adminPage.getByRole('heading',{name:'Huisstijl',exact:true}).waitFor();
- await adminPage.getByLabel('Primaire kleur',{exact:true}).fill('#FFFFFF');
- assert.equal(await adminPage.locator('.branding-preview').evaluate(el=>getComputedStyle(el).getPropertyValue('--on-accent').trim()),'#000000');
+ // Identity, three independent colours, raster logo, save/reload and public login.
+ const saveIdentity=async()=>{
+  assert.equal(await adminPage.getByRole('button',{name:'Huisstijl opslaan'}).isDisabled(),false,'Save should be enabled: '+await adminPage.locator('.stack-form').first().innerText());
+  const invalid=await adminPage.getByRole('button',{name:'Huisstijl opslaan'}).locator('xpath=ancestor::form').evaluate(form=>Array.from(form.elements).filter(el=>el.willValidate&&!el.validity.valid).map(el=>({name:el.name,value:el.value,message:el.validationMessage})));assert.deepEqual(invalid,[]);
+  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/instellingen/huisstijl'),adminPage.getByRole('button',{name:'Huisstijl opslaan'}).click()]);
+  await adminPage.locator('main form button[aria-busy="false"]').waitFor();
+  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();await adminPage.waitForLoadState('networkidle');
+ };
+ assert.equal(await adminPage.getByRole('button',{name:'Huisstijl opslaan'}).isDisabled(),true);
+ await adminPage.getByLabel('Verenigingsnaam',{exact:true}).fill('Lokale testvereniging');
+ await adminPage.getByLabel('Verenigingslogo',{exact:true}).setInputFiles({name:'onveilig.svg',mimeType:'image/svg+xml',buffer:Buffer.from('<svg/>')});
+ await adminPage.getByRole('alert').filter({hasText:'Kies een PNG-'}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Huisstijl opslaan'}).isDisabled(),true);
+ await adminPage.getByLabel('Verenigingslogo',{exact:true}).setInputFiles({name:'testlogo.png',mimeType:'image/png',buffer:logoBytes});
+ await adminPage.locator('.branding-preview .club-logo').waitFor();
  await adminPage.getByLabel('Primaire kleur',{exact:true}).fill('#334455');
  await adminPage.getByLabel('Secundaire kleur',{exact:true}).fill('#7250A0');
+ await adminPage.getByLabel('Accentkleur',{exact:true}).fill('#FFFFFF');
+ assert.equal(await adminPage.locator('.branding-preview').evaluate(el=>getComputedStyle(el).getPropertyValue('--on-accent').trim()),'#000000');
  assert.equal(await adminPage.locator('.branding-preview').evaluate(el=>getComputedStyle(el).getPropertyValue('--brand-primary').trim()),'#334455');
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/instellingen/huisstijl'),adminPage.getByRole('button',{name:'Kleuren opslaan'}).click()]);
- await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(brand.primary_color,'#334455');
+ await adminPage.getByLabel('Accentkleur',{exact:true}).fill('#C04C18');
+ await saveIdentity();
+ assert.equal(brand.primary_color,'#334455');assert.equal(brand.accent_color,'#C04C18');assert.equal(brand.club_name,'Lokale testvereniging');assert.ok(brand.logo_data.startsWith('data:image/png;base64,'));
  await adminPage.reload();await adminPage.getByRole('heading',{name:'Huisstijl',exact:true}).waitFor();
  assert.equal(await adminPage.getByLabel('Primaire kleur',{exact:true}).inputValue(),'#334455');
  assert.equal(await adminPage.locator('html').evaluate(el=>getComputedStyle(el).getPropertyValue('--brand-primary').trim()),'#334455');
+ assert.match(await adminPage.locator('.brand').innerText(),/^Lokale testvereniging/);
+ assert.equal(await adminPage.locator('.brand .club-logo').getAttribute('src'),brand.logo_data);
+ const publicPage=await browser.newPage();await publicPage.goto(base+'/login');
+ assert.match(await publicPage.locator('.auth-brand').innerText(),/^Lokale testvereniging/);assert.equal(await publicPage.title(),'Lokale testvereniging · Vrijwilligers');
+ assert.equal(await publicPage.locator('.auth-brand .club-logo').getAttribute('src'),brand.logo_data);await publicPage.close();
+ if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/huisstijl-aangepast-${width}.png`,fullPage:true});}
+ await adminPage.setViewportSize({width:1280,height:950});
+ await adminPage.getByLabel('Accentkleur',{exact:true}).fill('#bad');assert.equal(await adminPage.getByRole('button',{name:'Huisstijl opslaan'}).isDisabled(),true);
  await adminPage.getByRole('button',{name:'Standaardkleuren herstellen'}).click();
- await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/instellingen/huisstijl'),adminPage.getByRole('button',{name:'Kleuren opslaan'}).click()]);
- await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(brand.primary_color,'#087D56');
+ assert.equal(await adminPage.getByLabel('Verenigingsnaam',{exact:true}).inputValue(),'Lokale testvereniging');
+ assert.equal(await adminPage.locator('.branding-preview .club-logo').getAttribute('src'),brand.logo_data);
+ await saveIdentity();assert.equal(brand.primary_color,'#087D56');assert.equal(brand.accent_color,'#087D56');
+ // Restore fixture identity; a missing 007 keeps the older two-colour editor working.
+ await adminPage.getByLabel('Verenigingsnaam',{exact:true}).fill('AVV Keistad');await adminPage.getByRole('button',{name:'Logo verwijderen'}).click();
+ identityMigrationMissing=true;await saveIdentity();
+ await adminPage.getByRole('alert').filter({hasText:'Voer migratie 007_club_identity.sql'}).waitFor();
+ assert.equal(await adminPage.getByLabel('Verenigingsnaam',{exact:true}).isDisabled(),true);
+ assert.equal(await adminPage.getByLabel('Accentkleur',{exact:true}).isDisabled(),true);
+ await adminPage.getByLabel('Primaire kleur',{exact:true}).fill('#123456');identityMigrationMissing=false;
+ await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/instellingen/huisstijl'),adminPage.getByRole('button',{name:'Kleuren opslaan'}).click()]);await adminPage.locator('main form button[aria-busy="false"]').waitFor();await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ await adminPage.waitForLoadState('networkidle');assert.equal(brand.primary_color,'#123456');await adminPage.getByRole('button',{name:'Standaardkleuren herstellen'}).click();await saveIdentity();
  // All qualification selects use codes, including R2.2, and retain saved values.
  await adminPage.goto(base+'/beheer/leden');
  const memberForm=adminPage.getByRole('button',{name:'Lidinstellingen opslaan'}).locator('xpath=ancestor::form');
@@ -558,6 +606,8 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(testDuty.required_qualification,'R2.2');
  await page.goto(base+'/diensten');assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),false);
+ if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/open-dienst-${width}.png`,fullPage:true});}
+ await page.setViewportSize({width:1280,height:950});
  hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
  console.log('Scheidsrechtersniveaus geslaagd: acht codes in opgegeven volgorde, R2.2 opslaan/herladen, bestaand dienstniveau aanpassen en blokkeren van te laag niveau. Alleen lokale testgegevens.');
  // A destructive action requires confirmation; dismissing does not submit.
@@ -652,6 +702,8 @@ try {
    for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
+     const largeCorners=await adminPage.locator('.panel,.button,input:not([type=checkbox]),select,.badge,.table-wrap,.duty-card,.nav-link').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&parseFloat(getComputedStyle(el).borderTopLeftRadius)>4).map(el=>el.className));
+     assert.deepEqual(largeCorners,[],`Unexpected radius ${width} ${path}`);
      if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
