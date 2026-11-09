@@ -311,3 +311,11 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .match-filter-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 @media (max-width: 1024px) { .match-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 768px) { .match-filters { grid-template-columns: minmax(0, 1fr); } }
+
+.match-log-intro { color: var(--text-muted); font-size: 12px; margin: 0 0 var(--space-5); }
+.match-log-diff { grid-column: 1 / -1; }
+.match-log-diff table { white-space: normal; table-layout: fixed; }
+.match-log-diff th, .match-log-diff td { overflow-wrap: anywhere; vertical-align: top; }
+.match-log-diff th:first-child { width: 20%; }
+.match-log-diff tbody th { background: var(--surface); color: var(--text-muted); }
+.match-log-filters select { max-width: 260px; }

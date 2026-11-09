@@ -159,7 +159,7 @@ Vercel Hobby ondersteunt geen vieruurlijkse native cron, daarom gebruikt deze ap
 1. Open Vault in Supabase en maak een secret met naam `avv_nevobo_cron_secret`. Vul daar veilig exact dezelfde waarde in als `CRON_SECRET` in Vercel.
 2. Voer daarna `supabase/nevobo_cron.sql` uit. Controleer daarin de app-URL als je een andere vaste URL gebruikt. Het script weigert activering zolang geen eerste geslaagde import of veilige token in Vault bestaat; het bevat zelf geen geheime waarden.
 3. Het script registreert uitsluitend `avv-keistad-nevobo-import`: `0 */4 * * *` (elke vier uur, UTC). Andere jobs worden niet gewijzigd en er wordt geen mailtaak aangemaakt.
-4. Controleer in Supabase Cron de uitvoeringen en bij HTTP-fouten de pg_net-responsen (`net._http_response`). De importstatus en de laatste succesvolle import staan in de app. Meer dan vijf uur zonder succesvolle import geeft een waarschuwing.
+4. Controleer in Supabase Cron de uitvoeringen en bij HTTP-fouten de pg_net-responsen (`net._http_response`). Een geslaagde cron-SQL-opdracht bewijst alleen dat het HTTP-verzoek is ingepland; controleer ook de HTTP-status en de laatste succesvolle import in de app. Meer dan vijf uur zonder succesvolle import geeft een waarschuwing. De planning gebruikt UTC: in Nederland zijn de runs in de winter om 01:00, 05:00, 09:00, 13:00, 17:00 en 21:00; in de zomer één uur later.
 
 De cron-token staat alleen in Vercel en Vault; de SQL-job verwijst naar de Vault-naam. Het endpoint `/api/nevobo/sync` weigert verzoeken zonder de juiste bearer-token. Een importlease voorkomt gelijktijdige imports; een defecte of tegenstrijdige bron wordt niet gedeeltelijk toegepast.
 
@@ -202,3 +202,11 @@ Beheerrechten worden ook in de database gecontroleerd; leden en anonieme bezoeke
 Op **Wedstrijden** kunnen leden en beheerders **Dag**, **Team**, **Locatie** en **Status** combineren en met **Filteren** toepassen. De dag is een Nederlandse kalenderdag; een team wordt zowel thuis als uit gevonden. Gelijknamige locaties worden per plaats onderscheiden. Opties komen uit de daadwerkelijk geïmporteerde wedstrijden van het actieve seizoen.
 
 **Programma** toont komende wedstrijden, **Historie** afgelopen/gespeelde wedstrijden en **Alle wedstrijden** beide. Filters blijven behouden bij wisselen van tab en bij pagineren; een nieuw filter begint op pagina 1. **Filters wissen** wist de selectie binnen de huidige tab. De zichtbare status en het statusfilter komen overeen: ‘Afgelopen’ betekent dat de begintijd verstreken is, ‘Gespeeld’ vereist een bevestigde bronstatus. Dit verandert geen inschrijfregels of planning. Er is voor de filters geen nieuwe databasemigratie nodig.
+
+## Nevobo-wijzigingslog bekijken
+
+Admin en beheerder openen **Wedstrijden → Wijzigingslog**. De bestaande `match_events`-historie uit migratie 003 wordt hier weergegeven; er is geen nieuwe migratie nodig. Bij Wedstrijddetails staat ook **Wijzigingshistorie bekijken** voor uitsluitend die wedstrijd.
+
+Het log vergelijkt vastgelegde vorige/nieuwe begintijd, thuis-/uitteam, locatie, adres, postcode, plaats, veld en status. Het tijdstip is het moment waarop de app de wijziging vastlegde, niet het onbekende moment waarop Nevobo de bron wijzigde. De wedstrijdnaam komt uit de historische momentopname. De lijst bevat wijzigingen uit alle seizoenen, is filterbaar op soort/wedstrijd en heeft 25 momenten per pagina. Bestaande beheer-RLS blijft gelden; leden kunnen het wijzigingslog niet lezen en de app kan geen logregels handmatig aanpassen.
+
+Bovenaan staan de laatste geslaagde import, aantallen nieuwe/gewijzigde wedstrijden en een eventuele laatste fout. Het log bevat wijzigingen aan bestaande wedstrijden. Eerste imports/nieuw toegevoegde wedstrijden staan in de importteller, zonder verzonnen vorige waarden. Een onveranderde import maakt geen wijzigingsregels aan: de laatste succesvolle importtijd schuift wel op. Volledige uitvoeringshistorie van de automatische taak staat bij Supabase Cron; HTTP-responsen bij pg_net. Het wijzigingslog werkt ook zonder Resend.

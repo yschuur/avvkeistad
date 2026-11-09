@@ -39,6 +39,12 @@ test('Nevobo database: import, idempotentie, wijziging, annulering, inschrijfsto
   assert.equal(new Date(changedDuty.starts_at).getTime(),new Date(moved.starts_at).getTime());assert.equal(changedDuty.points,'2.00');assert.equal(changedDuty.cancelled,false);
   const notification=await first<{id:string;member_id:string;title:string;body:string}>('select * from notifications');
   assert.equal(notification.member_id,ref);assert.equal(notification.title,'Wedstrijd gewijzigd');assert.match(notification.body,/Nieuwe testhal/);
+  await as(null);await assert.rejects(db.query('select id from match_events'),/permission denied/);
+  await as(other);assert.equal((await db.query('select id from match_events')).rows.length,0);
+  await assert.rejects(db.query("insert into match_events(match_id,revision,kind,old_state,new_state) values($1,99,'moved','{}','{}')",[match.id]),/permission denied/);
+  await as(admin);
+  const event=await first<{old_state:{location:string};new_state:{location:string};kind:string}>('select old_state,new_state,kind from match_events where match_id=$1',[match.id]);
+  assert.equal(event.kind,'moved');assert.equal(event.old_state.location,'Testhal');assert.equal(event.new_state.location,'Nieuwe testhal');
   await as(other);assert.equal((await db.query('select id from notifications')).rows.length,0);
   await assert.rejects(db.query('select mark_notification_read($1)',[notification.id]),/niet gevonden/);
   await as(ref);await db.query('select mark_notification_read($1)',[notification.id]);

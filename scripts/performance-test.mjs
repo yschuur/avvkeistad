@@ -22,6 +22,13 @@ let brand={primary_color:'#087D56',secondary_color:'#6483B8'};
 const testMatch={id:'70000000-0000-4000-8000-000000000001',home_team:'Test thuis',away_team:'Test uit',starts_at:testDuty.starts_at,location:'Testlocatie',level:'',club_referee:false,status:'scheduled',cancelled:false,source_description:'Uitsluitend lokale testgegevens.',referee_duties:[]};
 let matchFilterFixtures=null;
 const testNotification={id:'80000000-0000-4000-8000-000000000001',member_id:memberA,match_id:testMatch.id,title:'Testwedstrijd gewijzigd',body:'Nieuwe planning in de lokale testomgeving.',created_at:new Date().toISOString(),read_at:null};
+const historyBefore={home_team:'Test thuis',away_team:'Test uit',starts_at:'2026-11-14T13:30:00Z',location:'Oude testhal',status:'scheduled'};
+const historyAfter={...historyBefore,starts_at:'2026-11-14T14:30:00Z',location:'Gewijzigde testhal'};
+const initialMatchEvents=[
+ {id:'84000000-0000-4000-8000-000000000001',match_id:testMatch.id,revision:2,kind:'moved',created_at:new Date(Date.now()-60000).toISOString(),old_state:historyBefore,new_state:historyAfter,match:{home_team:'Test thuis',away_team:'Test uit',match_code:'TEST'}},
+ {id:'84000000-0000-4000-8000-000000000002',match_id:testMatch.id,revision:3,kind:'cancelled',created_at:new Date().toISOString(),old_state:historyAfter,new_state:{...historyAfter,status:'cancelled'},match:{home_team:'Test thuis',away_team:'Test uit',match_code:'TEST'}},
+];
+let testMatchEvents=initialMatchEvents,historyUnavailable=false;
 const actualProgram=await readFile(new URL('../tests/fixtures/nevobo-program.rss',import.meta.url),'utf8');
 let programXml=actualProgram,programSignature=null,activeSync=false,refAssigned=false;
 const emailJobs=[],sentEmails=[],additionalNotifications=[];
@@ -106,6 +113,13 @@ const mock=createServer(async(req,res)=>{
   const own=url.searchParams.get('member_id')?.replace('eq.','');
   result=[testNotification,...additionalNotifications].filter(n=>n.member_id===own && (url.searchParams.get('read_at')!=='is.null'||!n.read_at));
   res.setHeader('Content-Range',result.length?`0-${result.length-1}/${result.length}`:'*/0');
+ }
+ if(url.pathname==='/rest/v1/match_events') {
+  if(historyUnavailable) {res.statusCode=400;return res.end(JSON.stringify({code:'42P01',message:'missing match_events'}));}
+  const kind=url.searchParams.get('kind')?.replace('eq.',''),match=url.searchParams.get('match_id')?.replace('eq.','');
+  const source=testMatchEvents.filter(e=>(!kind||e.kind===kind)&&(!match||e.match_id===match)).toSorted((a,b)=>b.created_at.localeCompare(a.created_at));
+  const from=Number(url.searchParams.get('offset') ?? 0),limit=Number(url.searchParams.get('limit') ?? 25);
+  result=source.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${source.length}`:`*/${source.length}`);
  }
  if(url.pathname==='/rest/v1/nevobo_sync_state') result=[syncState];
  if(url.pathname==='/rest/v1/matches') {
@@ -435,15 +449,44 @@ try {
  await adminPage.getByRole('heading',{name:/^Testmelding wedstrijdkoppeling(?:\s*Ongelezen)?$/}).waitFor();
  await page.goto(base+'/meldingen');
  assert.equal(await page.getByRole('heading',{name:/^Testmelding wedstrijdkoppeling(?:\s*Ongelezen)?$/}).count(),0);
+ // Managers can inspect stored old/new values; members cannot open the log.
+ await adminPage.goto(base+'/wedstrijden');
+ await adminPage.getByRole('link',{name:'Wijzigingslog',exact:true}).click();
+ await adminPage.getByRole('heading',{name:'Wijzigingslog',exact:true}).waitFor();
+ await adminPage.getByRole('status').filter({hasText:/^2 wijzigingsmomenten/}).waitFor();
+ const logArticles=adminPage.getByRole('article');assert.equal(await logArticles.count(),2);
+ const movedArticle=logArticles.filter({hasText:'Wedstrijd gewijzigd'});
+ await movedArticle.getByRole('cell',{name:'Oude testhal',exact:true}).waitFor();
+ await movedArticle.getByRole('cell',{name:'Gewijzigde testhal',exact:true}).waitFor();
+ const logForm=adminPage.getByRole('form',{name:'Wijzigingslog filteren'});
+ await logForm.getByLabel('Soort wijziging',{exact:true}).selectOption('cancelled');
+ await logForm.getByRole('button',{name:'Filteren',exact:true}).click();
+ await adminPage.getByRole('status').filter({hasText:/^1 wijzigingsmoment /}).waitFor();
+ assert.equal(await logArticles.count(),1);assert.equal(await movedArticle.count(),0);
+ await adminPage.goto(base+'/wedstrijden/log?match=90000000-0000-4000-8000-000000000099');
+ await adminPage.getByText('Nog geen wedstrijdwijzigingen in deze selectie.',{exact:true}).waitFor();
+ testMatchEvents=Array.from({length:27},(_,index)=>({...initialMatchEvents[0],id:'local-history-event-'+index}));
+ await adminPage.goto(base+'/wedstrijden/log?kind=moved');
+ await adminPage.getByRole('status').filter({hasText:/^27 wijzigingsmomenten/}).waitFor();assert.equal(await logArticles.count(),25);
+ await adminPage.getByRole('link',{name:'Volgende',exact:true}).click();
+ await adminPage.getByText('Pagina 2 van 2',{exact:true}).waitFor();assert.equal(await logArticles.count(),2);
+ assert.equal(new URL(adminPage.url()).searchParams.get('kind'),'moved');
+ testMatchEvents=initialMatchEvents;historyUnavailable=true;
+ await adminPage.goto(base+'/wedstrijden/log');
+ await adminPage.getByRole('alert').filter({hasText:'Het wijzigingslog kon niet worden geladen'}).waitFor();
+ historyUnavailable=false;
+ await page.goto(base+'/wedstrijden/log');await page.waitForURL(base+'/');
+ assert.equal(await page.getByRole('heading',{name:'Wijzigingslog',exact:true}).count(),0);
+ console.log('Wijzigingslog geslaagd: oude/nieuwe waarden, filters, paginering over 27 wijzigingen, lege selectie, ontbrekende tabel en ledenafscherming. Alleen lokale testgegevens.');
  console.log('Nevobo-integratie geslaagd: echt aangeleverd RSS-item, beveiligde cronroute, handmatige sync, wijzigingsmail, idempotentie en behoud bij bronfout. RSS en Resend uitsluitend lokaal nagebootst.');
  const screenshots=process.env.SCREENSHOT_DIR;
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/beheer','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/beheer','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
-     if(screenshots && ['/','/wedstrijden','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/wedstrijden','/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/beheer/seizoenen'?'seizoenen':path==='/wedstrijden'?'wedstrijden':path==='/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
