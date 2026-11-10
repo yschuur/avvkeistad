@@ -563,14 +563,14 @@ input[aria-invalid=true] { border-color: var(--danger); }
 
 .function-catalog-layout { margin-bottom: var(--space-5); }
 
-/* Date-grouped member duty list: the same rows on desktop and phone. */
+/* Date-grouped member duties, shown as compact blocks. */
 .duty-day { border-bottom: 1px solid var(--border); }
 .duty-day > summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-4); min-height: 48px; cursor: pointer; background: var(--surface); }
 .duty-day > summary::before { content: '+'; }
 .duty-day[open] > summary::before { content: '−'; }
 .duty-day > summary > span:first-of-type { flex: 1; font-weight: 600; }
-.member-workspace .day-duty-list .duty-card { border: 0; border-top: 1px solid var(--border); border-radius: 0; margin: 0; grid-template-columns: minmax(0,2fr) auto; }
-.duty-day-entries { padding: 0 var(--space-4); background: var(--surface); }
+.member-workspace .day-duty-list .duty-card { min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); margin: 0; padding: var(--space-3); gap: var(--space-2); grid-template-columns: minmax(0,1fr) auto; }
+.duty-day-entries { display: grid; grid-template-columns: repeat(auto-fill,minmax(min(100%,300px),1fr)); align-items: start; gap: var(--space-3); padding: var(--space-3); background: var(--surface); }
 .duty-participants { grid-column: 1 / -1; font-size: 12px; color: var(--text-muted); overflow-wrap: anywhere; }
 
 .filter-bar .member-duty-filters { flex-wrap: wrap; align-items: center; min-width: 0; }
@@ -601,3 +601,13 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .duty-roster li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-subtle); color: var(--text); }
 .duty-roster li > span:last-child { overflow-wrap: anywhere; min-width: 0; }
 .duty-roster .avatar { width: 24px; height: 24px; font-size: 10px; }
+
+.member-workspace .day-duty-list .duty-actions { order: 2; padding-top: 0; border: 0; }
+.member-workspace .day-duty-list .duty-actions form, .member-workspace .day-duty-list .duty-actions .button { width: 100%; }
+.day-duty-list .duty-roster { order: 1; display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2); }
+.day-duty-list .duty-roster li { padding: var(--space-1); }
+.day-duty-list .duty-roster .avatar { width: 20px; height: 20px; }
+.day-duty-list .responsibility { order: 3; }
+
+.day-duty-list .duty-meta { overflow-wrap: anywhere; }
+.day-duty-list .duty-meta > span { min-width: 0; }

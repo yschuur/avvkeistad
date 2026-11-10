@@ -446,6 +446,9 @@ try {
  await fullRow.getByRole('list',{name:'Aangemelde leden'}).getByText('Bram Test',{exact:true}).waitFor();
  assert.equal(await fullRow.locator('.duty-main').evaluate(el=>el.firstElementChild.classList.contains('duty-type')),true);
  assert.equal(await fullRow.locator('.duty-type').count(),1);
+ const cardBounds=await fullRow.boundingBox(),buttonBounds=await fullRow.getByRole('button',{name:'Inschrijven',exact:true}).boundingBox();
+ assert.ok(cardBounds&&buttonBounds&&cardBounds.width<=500&&buttonBounds.x>=cardBounds.x&&buttonBounds.y>=cardBounds.y&&buttonBounds.x+buttonBounds.width<=cardBounds.x+cardBounds.width&&buttonBounds.y+buttonBounds.height<=cardBounds.y+cardBounds.height,'Compact block contains its signup button');
+
  assert.equal(await fullRow.locator('.duty-availability').count(),0);
  assert.equal(await fullRow.getByText('Nog niemand ingepland.',{exact:true}).count(),0);
 
