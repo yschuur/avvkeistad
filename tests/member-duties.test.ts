@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions,listedMemberDuties,groupDutiesByDay,dutyVacancy } from '../lib/member-duties';
+import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions,listedMemberDuties,groupDutiesByDay,dutyVacancy,filterDutiesByHomeTeam } from '../lib/member-duties';
 import { REFEREE_LEVELS } from '../lib/referee-levels';
 import type { AppData } from '../lib/data';
 import type { Duty,Profile,Enrollment } from '../lib/domain';
@@ -69,4 +69,14 @@ test('Vlaggen verdwijnen uit aanbod; openfilter volgt vrije plekken, sluiting en
  assert.deepEqual(dutyVacancy(d,full,now),{occupied:1,remaining:0,offered:0,open:false});
  assert.equal(dutyVacancy(d,offered,now).open,true);assert.equal(dutyVacancy(d,closed,now).open,false);
  assert.equal(dutyVacancy(d,duty('free',{capacity:3}),now).remaining,3);
+});
+
+test('ledenfilter kiest het thuisteam van de wedstrijd, onafhankelijk van de teamreservering',()=>{
+ const d=data();d.teams=[{id:'own',name:'Heren 4',age_class:'senior'},{id:'other-team',name:'DS 2',age_class:'senior'}];
+ const match=(id:string,home:string,away:string)=>({id,home_team:home,away_team:away,starts_at:null,location:'Hal',level:'',club_referee:false});
+ d.matches=[match('home','Sponsor/AVV Keistad HS 4','Andere club HS 1'),match('away','Andere club HS 1','AVV Keistad HS 4'),match('other','AVV Keistad DS 2','Andere club DS 1')];
+ d.duties=[duty('unreserved-home',{match_id:'home'}),duty('reserved-elsewhere-home',{match_id:'home',assigned_team_id:'other-team'}),duty('own-reserved-away',{match_id:'away',assigned_team_id:'own'}),duty('own-reserved-bar',{assigned_team_id:'own'}),duty('other-home',{match_id:'other',assigned_team_id:'own'}),duty('missing',{match_id:'missing',assigned_team_id:'own'})];
+ assert.deepEqual(filterDutiesByHomeTeam(d,d.duties,'own').map(d=>d.id),['unreserved-home','reserved-elsewhere-home']);
+ assert.deepEqual(filterDutiesByHomeTeam(d,d.duties,'other-team').map(d=>d.id),['other-home']);
+ assert.deepEqual(filterDutiesByHomeTeam(d,d.duties),d.duties);assert.deepEqual(filterDutiesByHomeTeam(d,d.duties,'unknown'),[]);
 });

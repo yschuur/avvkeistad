@@ -1,3 +1,4 @@
+import { keistadTeamKey } from './team-identity';
 import { createMatchAvailability } from './match-availability';
 import type { AppData } from './data';
 import type { Duty,Profile,Enrollment } from './domain';
@@ -59,4 +60,13 @@ export function teamDutyOptions(data:AppData,duty:Duty,teamId:string) {
 }
 export function teamDutyCandidates(data:AppData,duty:Duty,teamId:string) {
  return teamDutyOptions(data,duty,teamId).filter(option=>!option.reason).map(option=>option.profile);
+}
+
+/** Team filtering follows the playing home team, independent of duty reservation. */
+export function filterDutiesByHomeTeam(data:Pick<AppData,'teams'|'matches'>,duties:Duty[],teamId?:string) {
+ if(!teamId)return duties;
+ const team=data.teams.find(t=>t.id===teamId),key=team?keistadTeamKey(team.name,true):null;
+ if(!key)return [];
+ const homeMatches=new Set(data.matches.filter(m=>keistadTeamKey(m.home_team)===key).map(m=>m.id));
+ return duties.filter(d=>Boolean(d.match_id&&homeMatches.has(d.match_id)));
 }

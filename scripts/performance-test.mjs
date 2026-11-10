@@ -393,7 +393,7 @@ try {
  await page.route('**/diensten?*',async route=>{await gate;await route.continue();});
  await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link',{name:'Diensten',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
- release();await page.waitForURL('**/diensten');await page.getByRole('heading',{name:'Open diensten',exact:true}).waitFor();
+ release();await page.waitForURL('**/diensten');await page.getByRole('heading',{name:'Diensten',exact:true}).waitFor();
  await page.goto(base+'/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
  // Combine all four match filters as a member, including an away match,
  // repeated venue names and a UTC timestamp belonging to the next Dutch day.
@@ -458,10 +458,11 @@ try {
  assert.match((await load('/diensten',cookieB)).html,/Testdienst/);
  testDuty.signup_closed=false;
  // Dates start collapsed; full duties and participant names stay visible after opening.
+ const listTeamsBefore=testTeams,listMatchesBefore=matchFilterFixtures;testTeams=[{...testTeams[0],name:'HS 4'}];matchFilterFixtures=[{...testMatch,home_team:'Sponsor/AVV Keistad HS 4',away_team:'Andere club HS 1'}];
  const fullListDuty='50000000-0000-4000-8000-000000000091';
- extraDuties=[{...testDuty,id:fullListDuty,title:'Volle teamdienst',assigned_team_id:teamId,capacity:1,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()}];
+ extraDuties=[{...testDuty,id:fullListDuty,title:'Volle teamdienst',assigned_team_id:null,match_id:testMatch.id,capacity:1,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()}];
  extraEnrollments=[{id:'85000000-0000-4000-8000-000000000091',duty_id:fullListDuty,member_id:memberB,revoked:false,offered:false,created_at:new Date().toISOString()}];
- await page.goto(base+'/diensten');await page.getByRole('heading',{name:'Open diensten',exact:true}).waitFor();
+ await page.goto(base+'/diensten');await page.getByRole('heading',{name:'Diensten',exact:true}).waitFor();
  assert.equal(await page.locator('.duty-day').count(),2);
  assert.equal(await page.locator('.duty-day[open]').count(),0);
  await page.locator('.duty-day summary').last().focus();await page.keyboard.press('Enter');
@@ -490,7 +491,7 @@ try {
  await page.reload();assert.equal(await page.getByLabel('Alleen open diensten',{exact:true}).isChecked(),true);
  await page.getByRole('link',{name:'Filters wissen',exact:true}).click();await page.waitForURL(base+'/diensten');
  assert.equal(await page.locator('.duty-day').count(),2);
- await page.setViewportSize({width:1280,height:950});extraDuties=[];extraEnrollments=[];
+ await page.setViewportSize({width:1280,height:950});extraDuties=[];extraEnrollments=[];testTeams=listTeamsBefore;matchFilterFixtures=listMatchesBefore;
  console.log('Dienstenlijst geslaagd: gesloten datums, toetsenbord openen, volle teamdienst met namen, geblokkeerde inschrijving, teamfilter en wissen, desktop/mobiel.');
  // Exercise the original admin flow, rejected credentials and both email-link formats.
  const adminPage=await browser.newPage();adminPage.setDefaultTimeout(10000);await adminPage.goto(base+'/login');
@@ -1285,6 +1286,26 @@ try {
  console.log('Wedstrijdcontrole browser geslaagd: thuis/uit, exacte tijdgrenzen, volledige dienst, grijze leden- en teamopties met korte reden, dynamische aanmaaktijden, aanvoerder en 320/390/768/1440px.');
 
  }
+
+ {
+ const page=await browser.newPage();page.setDefaultTimeout(10000);
+ await page.goto(base+'/login');await page.getByLabel('E-mailadres').fill('anna@example.test');await page.getByLabel('Wachtwoord',{exact:true}).fill(passwords.get('anna@example.test'));await page.getByRole('button',{name:'Inloggen',exact:true}).click();await page.waitForURL(base+'/');await page.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
+ const otherTeam='30000000-0000-4000-8000-000000000002';testTeams=[{id:teamId,name:'Heren 4',age_class:'senior',competition_level:null},{id:otherTeam,name:'DS 2',age_class:'senior',competition_level:null}];
+ matchFilterFixtures=[{...testMatch,id:'70000000-0000-4000-8000-000000000011',home_team:'Sponsor/AVV Keistad HS 4',away_team:'Andere club HS 1',referee_duties:[]},{...testMatch,id:'70000000-0000-4000-8000-000000000012',home_team:'Andere club HS 1',away_team:'AVV Keistad HS 4',referee_duties:[]}];
+ extraDuties=[{...testDuty,id:'50000000-0000-4000-8000-000000000011',title:'Thuiswedstrijd open voor alle teams',kind:'referee',required_qualification:'V6',match_id:matchFilterFixtures[0].id,assigned_team_id:null},{...testDuty,id:'50000000-0000-4000-8000-000000000012',title:'Thuiswedstrijd toegewezen aan ander team',kind:'referee',required_qualification:'V6',capacity:1,match_id:matchFilterFixtures[0].id,assigned_team_id:otherTeam},{...testDuty,id:'50000000-0000-4000-8000-000000000013',title:'Uitwedstrijd toegewezen aan gekozen team',kind:'referee',required_qualification:'V6',match_id:matchFilterFixtures[1].id,assigned_team_id:teamId},{...testDuty,id:'50000000-0000-4000-8000-000000000014',title:'Bardienst toegewezen aan gekozen team',assigned_team_id:teamId}];
+ extraEnrollments=[{id:'85000000-0000-4000-8000-000000000012',duty_id:extraDuties[1].id,member_id:memberB,revoked:false,offered:false}];
+ await page.goto(base+'/diensten');await page.getByRole('heading',{name:'Diensten',exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'Open diensten',exact:true}).count(),0);assert.equal(await page.getByLabel('Team',{exact:true}).locator('option[value="open"]').count(),0);
+ await page.locator('.duty-day>summary').click();await page.getByRole('heading',{name:'Bardienst toegewezen aan gekozen team',exact:true}).waitFor();
+ await page.getByLabel('Team',{exact:true}).selectOption(teamId);await page.getByRole('button',{name:'Filteren',exact:true}).click();await page.waitForURL(u=>u.searchParams.get('team')===teamId);await page.locator('.duty-day>summary').click();
+ assert.equal(await page.getByRole('article').count(),2);await page.getByRole('heading',{name:'Thuiswedstrijd open voor alle teams',exact:true}).waitFor();await page.getByRole('heading',{name:'Thuiswedstrijd toegewezen aan ander team',exact:true}).waitFor();assert.equal(await page.getByRole('heading',{name:'Uitwedstrijd toegewezen aan gekozen team',exact:true}).count(),0);assert.equal(await page.getByRole('heading',{name:'Bardienst toegewezen aan gekozen team',exact:true}).count(),0);
+ await page.getByLabel('Type dienst',{exact:true}).selectOption('referee');await page.getByLabel('Alleen open diensten',{exact:true}).check();await page.getByRole('button',{name:'Filteren',exact:true}).click();await page.waitForURL(u=>u.searchParams.get('open')==='1');await page.locator('.duty-day>summary').click();assert.equal(await page.getByRole('article').count(),1);await page.getByRole('heading',{name:'Thuiswedstrijd open voor alle teams',exact:true}).waitFor();
+ await page.reload();assert.equal(await page.getByLabel('Team',{exact:true}).inputValue(),teamId);assert.equal(await page.getByLabel('Type dienst',{exact:true}).inputValue(),'referee');assert.equal(await page.getByLabel('Alleen open diensten',{exact:true}).isChecked(),true);
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,1440]) {await page.setViewportSize({width,height:950});await page.goto(base+'/diensten?team='+teamId);await page.locator('.duty-day>summary').click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/diensten-${width}.png`,fullPage:true});}
+ await page.getByRole('link',{name:'Filters wissen',exact:true}).click();await page.waitForURL(base+'/diensten');if(!await page.locator('.duty-day').evaluate(el=>el.open))await page.locator('.duty-day>summary').click();await page.getByRole('heading',{name:'Bardienst toegewezen aan gekozen team',exact:true}).waitFor();
+ console.log('Ledenfilter geslaagd: titel Diensten, thuisteam met sponsor/korte naam, reservering onafhankelijk, uitwedstrijden en ongerelateerde diensten uitgesloten, combinatie met type/open, bewaren/herladen, wissen en mobiel.');
+
+ await page.close();}
 } finally {
  if(browser) await browser.close();app.kill('SIGTERM');mock.closeAllConnections();await new Promise(resolve=>mock.close(resolve));
 }
