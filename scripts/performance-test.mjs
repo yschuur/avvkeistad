@@ -805,11 +805,46 @@ try {
    for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
+     const mobileMenu=adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true});
+     if(await mobileMenu.count()) {
+      assert.equal(await mobileMenu.isVisible(),width<=768,`Menu visibility ${width} ${path}`);
+      if(width<=768) {
+       const bounds=await mobileMenu.boundingBox();
+       assert.ok(bounds&&bounds.x>=0&&bounds.x<32&&bounds.y>=0&&bounds.y<24&&bounds.width>=80&&bounds.height>=48,`Menu remains clearly visible at top left ${width} ${path}`);
+       assert.equal((await mobileMenu.textContent()).trim(),'Menu');
+       assert.equal(await mobileMenu.evaluate(el=>{const r=el.getBoundingClientRect();return el.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2));}),true,`Menu is not covered ${width} ${path}`);
+      }
+     }
      const largeCorners=await adminPage.locator('.panel,.button,input:not([type=checkbox]),select,.badge,.table-wrap,.duty-card,.nav-link').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&parseFloat(getComputedStyle(el).borderTopLeftRadius)>4).map(el=>el.className));
      assert.deepEqual(largeCorners,[],`Unexpected radius ${width} ${path}`);
      if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
+ // The same visible top-left trigger opens the left drawer in both workspaces.
+ for(const width of [320,390,768]) for(const path of ['/','/beheer']) {
+  await adminPage.setViewportSize({width,height:600});await adminPage.goto(base+path);
+  const trigger=adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true}),dialog=adminPage.getByRole('dialog',{name:'Navigatie',exact:true});
+  await adminPage.evaluate(()=>window.scrollTo(0,document.body.scrollHeight));
+  const before=await trigger.boundingBox();assert.ok(before&&before.x<32&&before.y<24,'Menu stays at top left after scrolling');
+  await trigger.click();await dialog.waitFor();
+  await dialog.evaluate(el=>Promise.all(el.getAnimations().map(animation=>animation.finished)));
+  const bounds=await dialog.boundingBox();assert.ok(bounds&&bounds.x===0&&bounds.y===0&&bounds.width<=width,'Drawer opens against the left edge');
+  assert.equal(await adminPage.evaluate(()=>document.body.style.overflow),'hidden');
+  const close=dialog.getByRole('button',{name:'Navigatiemenu sluiten',exact:true});await close.focus();
+  await adminPage.keyboard.press('Shift+Tab');assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true,'Reverse tab stays inside the drawer');
+  await adminPage.keyboard.press('Tab');assert.equal(await close.evaluate(el=>document.activeElement===el),true,'Focus wraps back to Close');
+  if(screenshots) await adminPage.screenshot({path:`${screenshots}/menu-${path==='/'?'lid':'beheer'}-${width}.png`});
+  await close.click();await dialog.waitFor({state:'hidden'});
+  assert.equal(await trigger.evaluate(el=>document.activeElement===el),true,'Focus returns to Menu');
+  assert.equal(await adminPage.evaluate(()=>document.body.style.overflow),'');
+  await trigger.click();await dialog.waitFor();
+  await adminPage.locator('.menu-backdrop').click({position:{x:width-4,y:100}});await dialog.waitFor({state:'hidden'});
+ }
+ await adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true}).click();
+ await adminPage.setViewportSize({width:1024,height:768});
+ await adminPage.getByRole('dialog',{name:'Navigatie',exact:true}).waitFor({state:'hidden'});
+ assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true}).isVisible(),false);
+ console.log('Mobiel menu geslaagd: zichtbare Menu-knop linksboven, bereikbaar na scrollen, linker paneel op 320/390/768px, Sluiten/achtergrond/Escape, focusval/focusterugkeer en sluiten bij desktopformaat. Beide omgevingen met lokale testgegevens.');
  await adminPage.setViewportSize({width:390,height:844});await adminPage.goto(base+'/');
  await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();
  await adminPage.getByRole('dialog',{name:'Navigatie',exact:true}).waitFor();

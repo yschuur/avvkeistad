@@ -37,9 +37,9 @@ export function NavigationFrame({children,management,captain}:{children:React.Re
     return ()=>{document.body.style.overflow=previous;window.removeEventListener('keydown',key);trigger.current?.focus();};
   },[open]);
   const adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
-  return <><nav className="mobile-navigation" aria-label={adminMode?'Mobiele beheernavigatie':'Mobiele hoofdnavigatie'}><MobileNavLinks management={management} captain={captain}/><button ref={trigger} className="mobile-menu-trigger icon-button" onClick={()=>setOpen(true)} aria-label="Navigatiemenu openen" aria-controls="app-navigation" aria-expanded={open}><Menu size={18}/><span className="mobile-menu-label">Menu</span></button></nav>
+  return <><button ref={trigger} className="mobile-menu-trigger icon-button" onClick={()=>setOpen(true)} aria-label="Navigatiemenu openen" aria-controls="app-navigation" aria-expanded={open}><Menu size={20} aria-hidden="true"/><span className="mobile-menu-label">Menu</span></button><nav className="mobile-navigation" aria-label={adminMode?'Mobiele beheernavigatie':'Mobiele hoofdnavigatie'}><MobileNavLinks management={management} captain={captain}/></nav>
     {open && <button className="menu-backdrop" aria-label="Navigatiemenu sluiten" tabIndex={-1} onClick={()=>setOpen(false)}/>}
     <aside id="app-navigation" ref={drawer} className={`sidebar ${open?'is-open':''}`} role={open?'dialog':undefined} aria-modal={open || undefined} aria-label="Navigatie" onClick={event=>{if((event.target as HTMLElement).closest('a')) setOpen(false);}}>
-      <button className="mobile-menu-close icon-button" onClick={()=>setOpen(false)} aria-label="Navigatiemenu sluiten"><X size={18}/></button>{children}
+      <button className="mobile-menu-close icon-button" onClick={()=>setOpen(false)} aria-label="Navigatiemenu sluiten"><X size={20} aria-hidden="true"/><span>Sluiten</span></button>{children}
     </aside></>;
 }
