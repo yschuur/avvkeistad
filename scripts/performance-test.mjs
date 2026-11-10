@@ -42,7 +42,7 @@ const cronToken='local-test-cron-token-not-a-real-secret-12345';
 let syncState={last_started_at:null,last_success_at:null,last_error_code:null,feed_published_at:null,imported_count:0,updated_count:0};
 const records=[];
 const authWrites=[];
-let refereePoints=2,dutySettingsMissing=false;
+let refereePoints=2,dutySettingsMissing=false,bulkMatchUnavailable=false,bulkMatchRuns=0;
 let testFunctions=[],testFunctionGroups=[],testAwards=[],functionMigrationMissing=false,functionVersion=0;
 const nextFunctionId=()=>`61000000-0000-4000-8000-${String(++functionVersion).padStart(12,'0')}`;
 const assignFunctionFixture=(memberId,kind,choice)=>{
@@ -114,6 +114,10 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/create_default_duty') return res.end('null');
  if(url.pathname==='/rest/v1/rpc/update_team_competition') {
   const input=JSON.parse(body);testTeams.find(t=>t.id===input.p_team).competition_level=input.p_competition==='Overig'?null:input.p_competition;return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/create_match_duties_for_period') {
+  if(bulkMatchUnavailable) {res.statusCode=404;return res.end(JSON.stringify({code:'PGRST202',message:'RPC missing'}));}
+  bulkMatchRuns++;return res.end(JSON.stringify({created:bulkMatchRuns===1?2:0,existing:bulkMatchRuns===1?1:3,excluded:1,unknown:1,unavailable:2}));
  }
  if(url.pathname==='/rest/v1/rpc/create_team_match_duty') {
   const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:refereePoints,assigned_team_id:input.p_team}];return res.end(JSON.stringify(testDuty.id));
@@ -647,6 +651,25 @@ try {
  await adminPage.getByRole('heading',{name:'Huisstijl',exact:true}).waitFor();assert.equal(await adminPage.getByLabel('Verenigingsnaam',{exact:true}).inputValue(),'Testclub via sessie');
  await adminPage.getByLabel('Verenigingsnaam',{exact:true}).fill('AVV Keistad');await saveIdentity();
  console.log('Huisstijlherstel geslaagd: verse sessielezing na migratie, publieke storing blokkeert beheer niet, tijdelijke databasefout toont herstelactie en behoudt opgeslagen gegevens. Alleen lokale testgegevens.');
+ // Period creation is a separate manager action, independent of table filters.
+ await adminPage.goto(base+'/beheer/wedstrijden?view=all&team=GeenSelectie');
+ const periodForm=adminPage.getByRole('form',{name:'Fluitdiensten voor periode aanmaken',exact:true});
+ await periodForm.getByLabel('Vanaf',{exact:true}).fill('2090-06-03');
+ await periodForm.getByLabel('Tot en met',{exact:true}).fill('2090-06-02');
+ const submitPeriod=async()=>{await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/wedstrijden'),periodForm.getByRole('button',{name:'Fluitdiensten aanmaken',exact:true}).click()]);await adminPage.waitForLoadState('networkidle');};
+ await submitPeriod();await adminPage.getByRole('alert').filter({hasText:'Kies geldige datums'}).waitFor();
+ assert.equal(bulkMatchRuns,0);
+ assert.equal(await periodForm.getByLabel('Vanaf',{exact:true}).inputValue(),'2090-06-03');
+ await periodForm.getByLabel('Vanaf',{exact:true}).fill('2090-06-02');
+ await submitPeriod();await adminPage.getByRole('status').filter({hasText:'2 fluitdiensten aangemaakt.'}).waitFor();
+ assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/create_match_duties_for_period')).at(-1).body,{p_season:season,p_from:'2090-06-02',p_until:'2090-06-02'});
+ await adminPage.getByText('Controleer de teamnamen en competitieniveaus bij Beheer → Teams.',{exact:true}).waitFor();
+ await submitPeriod();await adminPage.getByRole('status').filter({hasText:'0 fluitdiensten aangemaakt.'}).waitFor();
+ bulkMatchUnavailable=true;await submitPeriod();await adminPage.getByRole('alert').filter({hasText:'012_match_duty_period.sql'}).waitFor();bulkMatchUnavailable=false;
+ await page.goto(base+'/wedstrijden');assert.equal(await page.getByRole('form',{name:'Fluitdiensten voor periode aanmaken',exact:true}).count(),0);
+ for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR) await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/fluitdiensten-periode-${width}.png`,fullPage:true});}
+ await adminPage.setViewportSize({width:1280,height:950});
+ console.log('Fluitdiensten per periode geslaagd: datumvalidatie en invoerbehoud, RPC zonder tabelselectie, aantallen en overslaan, herhalen, ontbrekende migratie, ledenafscherming en mobiel.');
  // All qualification selects use codes, including R2.2, and retain saved values.
  await adminPage.goto(base+'/beheer/leden');
  const memberForm=adminPage.getByRole('button',{name:'Lidinstellingen opslaan'}).locator('xpath=ancestor::form');

@@ -329,3 +329,7 @@ Voer `supabase/migrations/010_division_referee_levels.sql` uit na 006 in de data
 ## Diensten per datum en deelnemers (011)
 
 Voer `supabase/migrations/011_duty_participants.sql` uit in de database van de app, na 001. Open diensten toont alle komende niet-geannuleerde diensten per uitklapbare datum, met combineerbare team- en typefilters. Volle diensten en de ingeschreven leden blijven zichtbaar. De beperkte RPC geeft uitsluitend voor komende diensten van het actieve seizoen de voor- en achternamen van actieve inschrijvingen terug aan ingelogde leden. Profiel-, e-mail- en inschrijfhistorie blijven onder bestaande RLS. Inschrijfbevoegdheden veranderen niet.
+
+## Fluitdiensten voor een periode (012)
+
+Voer `supabase/migrations/012_match_duty_period.sql` uit na 008 en 010. Beheer → Wedstrijden biedt Vanaf en Tot en met (beide inbegrepen, Europe/Amsterdam) en Fluitdiensten aanmaken. De actie gebruikt alle thuiswedstrijden van het actieve seizoen in die periode, onafhankelijk van zichtbare filters of pagina. Geplande toekomstige wedstrijden onder Promotieklasse krijgen een dienst met de ingestelde standaardpunten, 90 minuten en automatisch niveau, open voor alle teams. Bestaande diensten (ook geannuleerde) worden overgeslagen; onbekende teams en niet-beschikbare wedstrijden worden afzonderlijk geteld. De database controleert beheerrechten, vergrendelt wedstrijden tegen dubbele gelijktijdige aanmaak en schrijft de tellingen naar audit_log. De hele actie is één transactie; herhalen maakt geen dubbele actieve diensten.

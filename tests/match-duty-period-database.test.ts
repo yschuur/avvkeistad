@@ -1,0 +1,52 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
+import { PGlite } from '@electric-sql/pglite';
+import { matchDutyPeriodSchema } from '../lib/match-duty-period';
+test('periodeformulier controleert datums en volgorde',()=>{
+ const season='10000000-0000-4000-8000-000000000001';
+ assert.equal(matchDutyPeriodSchema.safeParse({season,from:'2090-06-02',until:'2090-06-02'}).success,true);
+ for(const [from,until] of [['','2090-06-02'],['2090-02-30','2090-06-02'],['2090-06-03','2090-06-02']]) assert.equal(matchDutyPeriodSchema.safeParse({season,from,until}).success,false);
+});
+test('fluitdiensten per periode: rechten, Nederlandse daggrenzen, regels, standaardpunten en veilig herhalen',async()=>{
+ const db=new PGlite(),manager='10000000-0000-4000-8000-000000000001',member='10000000-0000-4000-8000-000000000002';
+ const row=async(sql:string,args:unknown[]=[]) => (await db.query(sql,args)).rows[0] as Record<string,any>;
+ const as=async(id:string|null)=>{await db.exec('reset role');await db.query("select set_config('request.jwt.claim.sub',$1,false)",[id??'']);await db.exec('set role '+(id?'authenticated':'anon'));};
+ try {
+  await db.exec(`create role anon;create role authenticated;create role service_role;create schema auth;create table auth.users(id uuid primary key,email text,raw_user_meta_data jsonb default '{}');create function auth.uid() returns uuid language sql stable as $$select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid$$;grant usage on schema auth to authenticated;grant execute on function auth.uid() to authenticated;`);
+  for(const file of ['001_initial.sql','003_nevobo_matches.sql','005_referee_qualifications.sql','006_competition_referee_rules.sql','008_team_duties_and_referee_defaults.sql','010_division_referee_levels.sql','012_match_duty_period.sql']) await db.exec(await readFile(new URL('../supabase/migrations/'+file,import.meta.url),'utf8'));
+  for(const id of [manager,member]) await db.query('insert into auth.users(id,email) values($1,$2)',[id,id+'@example.test']);
+  await db.query("update profiles set role='manager' where id=$1",[manager]);
+  const season=(await row("insert into seasons(name,starts_on,ends_on,active,default_norm) values('Actief','2090-01-01','2090-12-31',true,20) returning id")).id;
+  const other=(await row("insert into seasons(name,starts_on,ends_on,active,default_norm) values('Ander','2090-01-01','2090-12-31',false,20) returning id")).id;
+  await db.query("insert into teams(season_id,name,age_class,competition_level) values($1,'AVV Keistad HS 4','senior','Eerste klasse'),($1,'AVV Keistad HS 1','senior','Superdivisie')",[season]);
+  const match=async(home:string,at:string,status='scheduled',s=season)=>(await row("insert into matches(season_id,home_team,away_team,starts_at,location,level,status) values($1,$2,'Andere club', $3,'Testhal','',$4) returning id",[s,home,at,status])).id;
+  const first=await match('Sponsor/AVV Keistad HS 4','2090-06-01T22:00:00Z');
+  await match('AVV Keistad HS 4','2090-06-02T21:59:59Z');
+  const existing=await match('AVV Keistad HS 4','2090-06-02T13:00:00Z');
+  await match('AVV Keistad HS 4','2090-06-02T22:00:00Z');
+  await match('Andere club','2090-06-02T13:00:00Z');
+  await match('AVV Keistad HS 1','2090-06-02T13:00:00Z');
+  await match('AVV Keistad HS 99','2090-06-02T13:00:00Z');
+  for(const status of ['cancelled','missing','played']) await match('AVV Keistad HS 4','2090-06-02T13:00:00Z',status);
+  await match('AVV Keistad HS 4','2090-06-02T13:00:00Z','scheduled',other);
+  const cancelledMatch=await match('AVV Keistad HS 4','2090-06-02T14:00:00Z');
+  const run=()=>row("select create_match_duties_for_period($1,'2090-06-02','2090-06-02') as counts",[season]);
+  await as(null);await assert.rejects(run(),/permission denied/);
+  await as(member);await assert.rejects(run(),/beheerrechten/);
+  await as(manager);await db.query('select save_duty_settings(4.5)');
+  const cancelledDuty=(await row('select create_team_match_duty($1,null) as id',[cancelledMatch])).id;
+  await db.query('select cancel_duty($1)',[cancelledDuty]);
+  const original=(await row('select create_team_match_duty($1,null) as id',[existing])).id;
+  await assert.rejects(db.query("select create_match_duties_for_period($1,'2090-06-03','2090-06-02')",[season]),/periode/);
+  await assert.rejects(db.query("select create_match_duties_for_period($1,'2090-06-02','2090-06-02')",[other]),/actieve seizoen/);
+  assert.deepEqual((await run()).counts,{created:2,existing:2,excluded:1,unknown:1,unavailable:3});
+  assert.deepEqual((await run()).counts,{created:0,existing:4,excluded:1,unknown:1,unavailable:3});
+  const duty=await row('select points::text,required_qualification,extract(epoch from ends_at-starts_at)::int as seconds,assigned_team_id from duties where match_id=$1',[first]);
+  assert.deepEqual(duty,{points:'4.50',required_qualification:'V4',seconds:5400,assigned_team_id:null});
+  assert.equal((await row('select id from duties where match_id=$1',[existing])).id,original);
+  assert.equal((await row('select cancelled from duties where id=$1',[cancelledDuty])).cancelled,true);
+  assert.equal((await row('select count(*)::int as n from duties where match_id=$1',[cancelledMatch])).n,1);
+  assert.equal((await row("select count(*)::int as n from audit_log where action='create_match_duties_for_period'")).n,2);
+ } finally {await db.close();}
+});

@@ -12,6 +12,7 @@ import { mailConfig,sendMatchEmail } from '@/lib/nevobo/mail';
 import { loadNevoboProgram,syncErrorMessage } from '@/lib/nevobo/import-program';
 import { competitionLevelSchema } from '@/lib/competition-rules';
 import { refereeLevelSchema } from '@/lib/referee-levels';
+import { matchDutyPeriodSchema,type MatchDutyPeriodState } from '@/lib/match-duty-period';
 import { loginError } from '@/lib/auth-errors';
 import { seasonSchema, type SeasonValues, type SeasonFormState } from '@/lib/seasons';
 
@@ -199,6 +200,15 @@ export async function createMatchDuty(f:FormData) {
  });
 }
 
+export async function createMatchDutiesForPeriod(_state:MatchDutyPeriodState,f:FormData):Promise<MatchDutyPeriodState> {
+ try {
+  const {db}=await manager();
+  const input=matchDutyPeriodSchema.parse({season:text(f,'season'),from:text(f,'from'),until:text(f,'until')});
+  const {data,error}=await db.rpc('create_match_duties_for_period',{p_season:input.season,p_from:input.from,p_until:input.until});
+  if(error) return {error:error.code==='PGRST202'?'Voer migratie 012_match_duty_period.sql uit om fluitdiensten per periode aan te maken.':error.message};
+  revalidatePath('/','layout');return {counts:data};
+ } catch(e) {return {error:e instanceof z.ZodError?'Kies geldige datums; Tot en met moet op of na Vanaf liggen.':e instanceof Error?e.message:'Het aanmaken is niet gelukt. Probeer opnieuw.'};}
+}
 export async function syncNevobo() {
  await manager();
  let message='';let failed=false;
