@@ -1,3 +1,4 @@
+import { createMatchAvailability } from '@/lib/match-availability';
 import Link from 'next/link';
 import { planningUrl } from '@/lib/planning';
 import { FilterPanel } from '@/components/filter-panel';
@@ -14,6 +15,7 @@ import { RefereeLevelSelect } from '@/components/referee-level-select';
 import { enroll,changeEnrollment,cancelDuty,updateDuty,setDutyQualification } from '@/app/actions';
 export function DutyManagement({data,duty:d,returnTo,teamAssignmentAvailable=false,manageUrl,selected=false}:{data:AppData;duty:Duty;returnTo:string;teamAssignmentAvailable?:boolean;manageUrl?:string;selected?:boolean}) {
  const participants=data.enrollments.filter(e=>e.duty_id===d.id&&!e.revoked),remaining=Math.max(0,d.capacity-participants.length),future=new Date(d.starts_at)>new Date(),editable=future&&!d.cancelled&&!d.signup_closed;
+ const teamConflicts=new Map<string,string|null>();if(!manageUrl||selected){const check=createMatchAvailability(data.matches);for(const team of data.teams)teamConflicts.set(team.id,check(team.name,d));}
  const hidden=<><input type="hidden" name="return_to" value={returnTo}/><input type="hidden" name="duty_id" value={d.id}/></>;
  const local=(v:string)=>formatInTimeZone(v,'Europe/Amsterdam',"yyyy-MM-dd'T'HH:mm");
  return <div className="managed-duty">
@@ -21,11 +23,11 @@ export function DutyManagement({data,duty:d,returnTo,teamAssignmentAvailable=fal
   <p className="managed-duty-members small">{participants.length?participants.map(e=>{const p=data.profiles.find(p=>p.id===e.member_id);return `${p?.first_name??'Lid'} ${p?.last_name??''}${e.offered?' (ter overname)':''}`;}).join(', '):'Nog niemand ingepland'}</p>
   {manageUrl&&!selected?<Link className="planning-manage-link" prefetch={false} href={manageUrl}>Dienst beheren</Link>:<details className="duty-management-detail" open={selected||undefined}><summary tabIndex={0}>Dienst beheren</summary><div className="stack-form">
    <p className="field-help">{d.assigned_team_id?`Team: ${data.teams.find(t=>t.id===d.assigned_team_id)?.name??'Niet beschikbaar'}`:'Open voor alle teams'}</p>
-   {editable&&teamAssignmentAvailable&&<TeamDutyAssignment dutyId={d.id} teamId={d.assigned_team_id} teams={data.teams} returnTo={returnTo}/>}
+   {editable&&teamAssignmentAvailable&&<TeamDutyAssignment dutyId={d.id} teamId={d.assigned_team_id} teams={data.teams} matches={data.matches} duty={d} returnTo={returnTo}/>}
    {d.kind==='referee'&&d.match_id&&<p className="field-help">Automatisch minimum: {refereeDescription(d.required_qualification)}</p>}
    {editable&&d.kind==='referee'&&!d.match_id&&<form action={setDutyQualification} className="stack-form">{hidden}<RefereeLevelSelect id={`duty-level-${d.id}`} label="Vereist niveau" value={d.required_qualification}/><SubmitButton className="button secondary">Niveau opslaan</SubmitButton></form>}
    {editable&&remaining>0&&<form action={enroll} className="stack-form">{hidden}<label htmlFor={`assign-member-${d.id}`}>Lid toewijzen</label><select id={`assign-member-${d.id}`} name="member_id" required defaultValue=""><option value="" disabled>Kies een lid</option>{data.profiles.filter(p=>data.memberships.some(m=>m.member_id===p.id)).map(p=>{
-    const m=data.memberships.find(m=>m.member_id===p.id),reason=participants.some(e=>e.member_id===p.id)?'Al ingepland':d.assigned_team_id&&m?.team_id!==d.assigned_team_id?'Ander team':d.kind==='referee'&&!canReferee(p.referee_qualification,d.required_qualification)?'Niet bevoegd':data.enrollments.some(e=>e.member_id===p.id&&!e.revoked&&data.duties.some(other=>other.id===e.duty_id&&other.id!==d.id&&!other.cancelled&&overlaps(d,other)))?'Al een overlappende dienst':null;
+    const m=data.memberships.find(m=>m.member_id===p.id),matchConflict=m?teamConflicts.get(m.team_id)??null:null,reason=participants.some(e=>e.member_id===p.id)?'Al ingepland':d.assigned_team_id&&m?.team_id!==d.assigned_team_id?'Ander team':d.kind==='referee'&&!canReferee(p.referee_qualification,d.required_qualification)?'Niet bevoegd':data.enrollments.some(e=>e.member_id===p.id&&!e.revoked&&data.duties.some(other=>other.id===e.duty_id&&other.id!==d.id&&!other.cancelled&&overlaps(d,other)))?'Al een overlappende dienst':matchConflict;
     return <option key={p.id} value={p.id} disabled={Boolean(reason)}>{p.first_name} {p.last_name}{reason?` — ${reason}`:''}</option>;
    })}</select><SubmitButton className="button secondary">Lid toewijzen</SubmitButton></form>}
    {participants.map(e=>{const p=data.profiles.find(p=>p.id===e.member_id);return <form action={changeEnrollment} className="stack-form enrollment-correction" key={e.id}><input type="hidden" name="return_to" value={returnTo}/><input type="hidden" name="enrollment_id" value={e.id}/><input type="hidden" name="action" value="revoke"/><strong>{p?.first_name} {p?.last_name}</strong><label>Reden voor intrekken<input name="reason" required minLength={3}/></label><ConfirmSubmitButton className="button secondary danger" question="Deze inschrijving intrekken? De bijbehorende punten vervallen.">Intrekken</ConfirmSubmitButton></form>;})}

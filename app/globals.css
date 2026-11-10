@@ -674,3 +674,5 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .pagination-jump {flex-wrap:nowrap;min-width:220px;max-width:360px;}
 .pagination-choice {display:grid;gap:var(--space-1);flex:1;min-width:0;}
 .pagination-choice select {width:100%;}
+
+.team-assignment-field option:disabled,.managed-duty select option:disabled {color:var(--text-muted);}

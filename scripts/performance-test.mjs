@@ -849,10 +849,11 @@ try {
  await matchDuty.getByText('Vereist scheidsrechtersniveau: V4 of hoger (automatisch).',{exact:true}).waitFor();
  assert.equal(await matchDuty.locator('select[name=qualification]').count(),0);
  assert.equal(await matchDuty.locator('input[name=points],input[name=minutes]').count(),0);
- await matchDuty.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ assert.equal(await matchDuty.getByLabel('Toewijzen aan team',{exact:true}).locator(`option[value="${teamId}"]`).isDisabled(),true);
+ await matchDuty.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/create_team_match_duty')).at(-1).body,{p_match:testMatch.id,p_team:teamId});
+ assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/create_team_match_duty')).at(-1).body,{p_match:testMatch.id,p_team:null});
  await adminPage.locator('.duty-management-detail>summary').click();
  assert.equal(testMatch.referee_duties[0].points,3.25);
  if(process.env.SCREENSHOT_DIR) {
@@ -1201,10 +1202,11 @@ try {
  await manageTouch.locator('summary').filter({hasText:/^Fluitdienst aanmaken$/}).tap();
  const touchMatch=manageTouch.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).locator('xpath=ancestor::form');
  assert.equal(await touchMatch.locator('input[name=points],input[name=minutes]').count(),0);
- await touchMatch.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ assert.equal(await touchMatch.getByLabel('Toewijzen aan team',{exact:true}).locator(`option[value="${teamId}"]`).isDisabled(),true);
+ await touchMatch.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
  await Promise.all([manageTouch.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/wedstrijden'),touchMatch.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).tap()]);
  await manageTouch.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- assert.equal(testMatch.referee_duties[0].points,3.5);assert.equal(testMatch.referee_duties[0].assigned_team_id,teamId);
+ assert.equal(testMatch.referee_duties[0].points,3.5);assert.equal(testMatch.referee_duties[0].assigned_team_id,null);
  assert.equal(await manageTouch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
  if(screenshots) await manageTouch.screenshot({path:`${screenshots}/teamreservering-touch-390.png`,fullPage:true});
  Object.assign(testMatch,previousMatch);testDuty.cancelled=wasCancelled;testDuty.assigned_team_id=null;
@@ -1247,6 +1249,40 @@ try {
  await pages.getByRole('link',{name:'Pagina 12: Pagina 12',exact:true}).click();await page.getByText('Pagina 12 van 12',{exact:true}).waitFor();assert.equal(await page.getByLabel('Kies pagina',{exact:true}).inputValue(),'12');assert.equal(new URL(page.url()).searchParams.get('team'),'AVV Keistad HS 4');
  await page.getByLabel('Kies pagina',{exact:true}).selectOption('7');await pages.getByRole('button',{name:'Ga',exact:true}).click();await page.getByText('Pagina 7 van 12',{exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('team'),'AVV Keistad HS 4');
  console.log('Maandplanning en directe paginakeuze geslaagd: maandselectie in database, geen functielading of bulkformulieren, gesloten datums, maandgrensconflict, context na opslaan, mobiel en directe sprong naar pagina 12 en 7 met filters.');
+
+ }
+
+ {const page=adminPage;testSeasons=[{...initialSeason}];adminRole='admin';captainA=false;teamAssignments.clear();
+ testTeams=[{id:teamId,name:'HS 4',age_class:'senior',competition_level:'Eerste klasse'},{id:'30000000-0000-4000-8000-000000000002',name:'AVV Keistad DS 3',age_class:'senior',competition_level:'Eerste klasse'},{id:'30000000-0000-4000-8000-000000000003',name:'AVV Keistad HS 5',age_class:'senior',competition_level:null}];
+ const awayTeam=testTeams[1].id,freeTeam=testTeams[2].id;teamAssignments.set(memberA,teamId);teamAssignments.set(memberB,awayTeam);teamAssignments.set(admin,freeTeam);hideTestEnrollment=true;extraDuties=[];extraEnrollments=[];testMatch.referee_duties=[];
+ const matchTime=new Date(Date.now()+10*86400000);matchTime.setUTCHours(12,0,0,0);const at=hours=>new Date(matchTime.getTime()+hours*3600000).toISOString();
+ matchFilterFixtures=[{...testMatch,id:'70000000-0000-4000-8000-000000000012',home_team:'Sponsor/AVV Keistad HS 4',away_team:'Andere club HS 1',starts_at:at(0),cancelled:false,status:'scheduled',referee_duties:[]},{...testMatch,id:'70000000-0000-4000-8000-000000000013',home_team:'Andere club DS 1',away_team:'AVV Keistad DS 3',starts_at:at(0),cancelled:false,status:'scheduled',referee_duties:[]}];
+ Object.assign(testDuty,{cancelled:false,signup_closed:false,assigned_team_id:null,capacity:2,kind:'bar',required_level:0});
+ for(const [from,to,homeBlocked,awayBlocked] of [[-2,0,false,true],[0,2,true,true],[2,3,false,true],[-5,-3,false,false],[5,7,false,false],[-4,-2.99,false,true]]) {
+  Object.assign(testDuty,{starts_at:at(from),ends_at:at(to)});await page.goto(base+'/beheer/planning?month='+at(from).slice(0,7));await openPlanningDuty(page);
+  const member=page.getByLabel('Lid toewijzen',{exact:true}),team=page.locator('.team-assignment-form').getByLabel('Toewijzen aan team',{exact:true});
+  assert.equal(await member.locator(`option[value="${memberA}"]`).isDisabled(),homeBlocked);assert.equal(await member.locator(`option[value="${memberB}"]`).isDisabled(),awayBlocked);
+  assert.equal(await team.locator(`option[value="${teamId}"]`).isDisabled(),homeBlocked);assert.equal(await team.locator(`option[value="${awayTeam}"]`).isDisabled(),awayBlocked);assert.equal(await team.locator(`option[value="${freeTeam}"]`).isDisabled(),false);
+  assert.equal(await member.locator(`option[value="${memberA}"]`).textContent(),'Anna Test'+(homeBlocked?' — Eigen thuiswedstrijd':''));assert.equal(await team.locator(`option[value="${awayTeam}"]`).textContent(),'AVV Keistad DS 3'+(awayBlocked?' — Uitwedstrijd / reistijd':''));
+ }
+ matchFilterFixtures[1].status='played';Object.assign(testDuty,{starts_at:at(2),ends_at:at(3)});await page.goto(base+'/beheer/planning?month='+at(2).slice(0,7));await openPlanningDuty(page);assert.equal(await page.getByLabel('Lid toewijzen',{exact:true}).locator(`option[value="${memberB}"]`).isDisabled(),true);matchFilterFixtures[1].status='scheduled';
+ // Changing creation times immediately updates team availability.
+ await page.goto(base+'/beheer/bardiensten');await page.getByRole('link',{name:'Nieuwe dienst',exact:true}).click();const form=page.locator('#dienst-aanmaken');
+ const localTime=iso=>new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date(iso)).replace(' ','T');
+ await form.getByLabel('Begint op',{exact:true}).fill(localTime(at(0)));await form.getByLabel('Eindigt op',{exact:true}).fill(localTime(at(2)));
+ await form.getByLabel('Toewijzen aan team',{exact:true}).locator(`option[value="${teamId}"][disabled]`).waitFor({state:'attached'});
+ await form.getByLabel('Begint op',{exact:true}).fill(localTime(at(2)));await form.getByLabel('Eindigt op',{exact:true}).fill(localTime(at(3)));
+ await page.waitForFunction(id=>!document.querySelector('#new-duty-team option[value="'+id+'"]').disabled,teamId);
+ // A conflict in a later weekly occurrence also disables the team.
+ matchFilterFixtures.push({...matchFilterFixtures[0],id:'70000000-0000-4000-8000-000000000014',starts_at:at(7*24+2)});await page.reload();await page.getByRole('link',{name:'Nieuwe dienst',exact:true}).click();await form.getByLabel('Begint op',{exact:true}).fill(localTime(at(2)));await form.getByLabel('Eindigt op',{exact:true}).fill(localTime(at(3)));await form.getByLabel('Aantal weken (1 = eenmalig)',{exact:true}).fill('2');await form.getByLabel('Toewijzen aan team',{exact:true}).locator(`option[value="${teamId}"][disabled]`).waitFor({state:'attached'});await form.getByLabel('Aantal weken (1 = eenmalig)',{exact:true}).fill('1');await page.waitForFunction(id=>!document.querySelector('#new-duty-team option[value="'+id+'"]').disabled,teamId);
+ // Manager controls remain readable and inside the mobile viewport.
+ Object.assign(testDuty,{starts_at:at(0),ends_at:at(2)});
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:950});await page.goto(base+'/beheer/planning?month='+at(0).slice(0,7));await openPlanningDuty(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/wedstrijdcontrole-${width}.png`,fullPage:true});}
+ // Captains follow exactly the same rule, with only the short reason in the option.
+ captainA=true;testDuty.assigned_team_id=teamId;const captainPage=await browser.newPage();await captainPage.goto(base+'/login');await captainPage.getByLabel('E-mailadres').fill('anna@example.test');await captainPage.getByLabel('Wachtwoord',{exact:true}).fill(passwords.get('anna@example.test'));await captainPage.getByRole('button',{name:'Inloggen',exact:true}).click();await captainPage.waitForURL(base+'/');await captainPage.goto(base+'/team');
+ const captainSelect=captainPage.getByLabel('Teamlid toewijzen',{exact:true});assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).textContent(),'Anna Test — Eigen thuiswedstrijd');assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).isDisabled(),true);assert.equal(await captainPage.locator('.team-duty-blocked').count(),0);await captainPage.close();
+ console.log('Wedstrijdcontrole browser geslaagd: thuis/uit, exacte tijdgrenzen, volledige dienst, grijze leden- en teamopties met korte reden, dynamische aanmaaktijden, aanvoerder en 320/390/768/1440px.');
 
  }
 } finally {

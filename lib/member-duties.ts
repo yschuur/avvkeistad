@@ -1,3 +1,4 @@
+import { createMatchAvailability } from './match-availability';
 import type { AppData } from './data';
 import type { Duty,Profile,Enrollment } from './domain';
 import { overlaps } from './domain';
@@ -42,6 +43,7 @@ export function ownDutyEntries(data:AppData) {
  return [...entries.values()];
 }
 export function teamDutyOptions(data:AppData,duty:Duty,teamId:string) {
+ const team=data.teams.find(t=>t.id===teamId),matchConflict=team?createMatchAvailability(data.matches??[])(team.name,duty):null;
  return data.memberships.filter(m=>m.team_id===teamId).flatMap(m=>{
   const profile=data.profiles.find(p=>p.id===m.member_id);if(!profile) return [];
   let reason:string|null=null;
@@ -51,6 +53,7 @@ export function teamDutyOptions(data:AppData,duty:Duty,teamId:string) {
    : 'Niet het juiste niveau';
   else if(data.enrollments.some(e=>e.member_id===profile.id&&!e.revoked&&e.duty_id===duty.id)) reason='Al toegewezen';
   else if(data.enrollments.some(e=>e.member_id===profile.id&&!e.revoked&&data.duties.some(d=>d.id===e.duty_id&&!d.cancelled&&overlaps(d,duty)))) reason='Overlappende dienst';
+  else reason=matchConflict;
   return [{profile,reason}];
  });
 }
