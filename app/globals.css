@@ -586,3 +586,9 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .nav-group-chevron { margin-left: auto; }
 .nav-group[open] .nav-group-chevron { transform: rotate(180deg); }
 .nav-submenu .nav-link { padding-left: var(--space-6); }
+
+.duty-type { display: inline-flex; align-items: center; gap: var(--space-2); font-weight: 600; font-size: 12px; padding: var(--space-1) var(--space-2); color: var(--text); }
+.duty-capacity strong { display: block; font-size: 14px; }
+.duty-capacity.has-vacancy strong { color: var(--accent-text); }
+.member-duty-filters .checkbox-label { display: inline-flex; flex-direction: row; align-items: center; gap: var(--space-2); min-height: 44px; }
+.member-duty-filters input[type=checkbox] { accent-color: var(--accent-text); width: 18px; height: 18px; min-height: 18px; flex-shrink: 0; }

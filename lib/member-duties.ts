@@ -10,14 +10,19 @@ export function openMemberDuties(data:AppData,now=new Date()) {
  const team=data.memberships.find(m=>m.member_id===data.profile.id)?.team_id;
  if(!team) return [];
  return data.duties.filter(d=>{
-  if(d.cancelled||d.signup_closed||new Date(d.starts_at)<=now||mine.some(e=>e.duty_id===d.id)||!meetsDutyQualification(data.profile,d)||d.assigned_team_id&&d.assigned_team_id!==team) return false;
+  if(d.kind==='lines'||d.cancelled||d.signup_closed||new Date(d.starts_at)<=now||mine.some(e=>e.duty_id===d.id)||!meetsDutyQualification(data.profile,d)||d.assigned_team_id&&d.assigned_team_id!==team) return false;
   if(mine.some(e=>data.duties.some(other=>other.id===e.duty_id&&!other.cancelled&&overlaps(d,other)))) return false;
   const availability=data.availability.find(a=>a.duty_id===d.id);
   return (availability?.occupied ?? 0)<d.capacity||Boolean(availability?.offered_ids.length);
  });
 }
 export function listedMemberDuties(data:AppData,now=new Date()) {
- return data.duties.filter(d=>!d.cancelled&&new Date(d.starts_at)>now).sort((a,b)=>new Date(a.starts_at).getTime()-new Date(b.starts_at).getTime()||a.id.localeCompare(b.id));
+ return data.duties.filter(d=>d.kind!=='lines'&&!d.cancelled&&new Date(d.starts_at)>now).sort((a,b)=>new Date(a.starts_at).getTime()-new Date(b.starts_at).getTime()||a.id.localeCompare(b.id));
+}
+export function dutyVacancy(data:AppData,duty:Duty,now=new Date()) {
+ const availability=data.availability.find(a=>a.duty_id===duty.id);
+ const occupied=Number(availability?.occupied ?? 0),remaining=Math.max(0,duty.capacity-occupied),offered=availability?.offered_ids.length ?? 0;
+ return {occupied,remaining,offered,open:!duty.cancelled&&!duty.signup_closed&&new Date(duty.starts_at)>now&&(remaining>0||offered>0)};
 }
 export function groupDutiesByDay(duties:Duty[]) {
  const days=new Map<string,Duty[]>();

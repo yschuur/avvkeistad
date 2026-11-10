@@ -337,3 +337,7 @@ Voer `supabase/migrations/012_match_duty_period.sql` uit na 008 en 010. Beheer �
 ## Dienstenmenu en overige diensten (013)
 
 Beheer heeft een uitklapbaar Diensten-menu met Wedstrijden, Bardiensten, Evenementen, Overige diensten en Planning. De drie aanmaakpagina’s gebruiken dezelfde bestaande puntenberekening (1 uur = 1 punt per deelnemer), weekreeksen en teamreservering. Overige diensten krijgen een zelfgekozen titel en soort `other`. Voer `supabase/migrations/013_other_duties.sql` uit om deze extra soort toe te staan; bestaande diensten worden behouden. De bestaande beheerrollen blijven vereist.
+
+## Bardienstenset tot eind 2026
+
+Voer `scripts/seed-bar-duties-2026.sql` handmatig uit in de app-database. Het script voegt komende bardiensten op dinsdag, donderdag, vrijdag en zaterdag van 10 november t/m 31 december 2026 toe in het actieve seizoen, locatie Sportcomplex Amerena. Er zijn wisselende tijden, diensten van 1½ tot 3 uur en 1–3 deelnemers, regelmatig meerdere per dag. Punten volgen de werkelijke duur. Het actieve seizoen moet de periode omvatten. Verstreken tijden worden overgeslagen; herhalen bewaart bestaande diensten en inschrijvingen en maakt geen dubbele set. Dit is expliciet aangevraagde data, geen automatische migratie of applicatiedemo.

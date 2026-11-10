@@ -444,13 +444,19 @@ try {
  await page.locator('.duty-day summary').last().focus();await page.keyboard.press('Enter');
  const fullRow=page.getByRole('article').filter({hasText:'Volle teamdienst'});
  await fullRow.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
- await fullRow.getByText('Vol',{exact:true}).waitFor();
+ await fullRow.locator('.duty-capacity').getByText('Vol',{exact:true}).waitFor();
  assert.equal(await fullRow.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
  await page.getByLabel('Team',{exact:true}).selectOption(teamId);await page.getByRole('button',{name:'Filteren',exact:true}).click();
  await page.waitForURL(url=>url.pathname==='/diensten'&&url.searchParams.get('team')===teamId);
  assert.equal(await page.locator('.duty-day').count(),1);
  await page.locator('.duty-day summary').click();await page.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
  if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/diensten-per-dag-${width}.png`,fullPage:true});}
+ assert.equal(await page.getByLabel('Type dienst',{exact:true}).locator('option[value=lines]').count(),0);
+ await page.getByLabel('Alleen open diensten',{exact:true}).check();await page.getByRole('button',{name:'Filteren',exact:true}).click();
+ await page.waitForURL(url=>url.pathname==='/diensten'&&url.searchParams.get('open')==='1');
+ await page.getByText('Geen komende diensten in deze selectie.',{exact:true}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get('team'),teamId);
+ await page.reload();assert.equal(await page.getByLabel('Alleen open diensten',{exact:true}).isChecked(),true);
  await page.getByRole('link',{name:'Filters wissen',exact:true}).click();await page.waitForURL(base+'/diensten');
  assert.equal(await page.locator('.duty-day').count(),2);
  await page.setViewportSize({width:1280,height:950});extraDuties=[];extraEnrollments=[];

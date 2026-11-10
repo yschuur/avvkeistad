@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions,listedMemberDuties,groupDutiesByDay } from '../lib/member-duties';
+import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions,listedMemberDuties,groupDutiesByDay,dutyVacancy } from '../lib/member-duties';
 import { REFEREE_LEVELS,refereeDescription } from '../lib/referee-levels';
 import type { AppData } from '../lib/data';
 import type { Duty,Profile,Enrollment } from '../lib/domain';
@@ -59,4 +59,14 @@ test('ledenlijst bevat ook volle, eigen, onbevoegde en andere teamdiensten, op N
  const listed=listedMemberDuties(d,now);
  assert.deepEqual(listed.map(d=>d.id),['closed','full','other','ref','late']);
  assert.deepEqual(groupDutiesByDay(listed).map(([day,rows])=>[day,rows.length]),[['2027-01-10',4],['2027-01-11',1]]);
+});
+
+test('Vlaggen verdwijnen uit aanbod; openfilter volgt vrije plekken, sluiting en overnames',()=>{
+ const d=data(),full=duty('full'),offered=duty('offer'),closed=duty('closed',{signup_closed:true});
+ d.duties=[duty('lines',{kind:'lines'}),full,offered,closed];d.availability=[{duty_id:'full',occupied:1,offered_ids:[]},{duty_id:'offer',occupied:1,offered_ids:['offer-id']}];
+ assert.equal(listedMemberDuties(d,now).some(d=>d.kind==='lines'),false);
+ assert.equal(openMemberDuties(d,now).some(d=>d.kind==='lines'),false);
+ assert.deepEqual(dutyVacancy(d,full,now),{occupied:1,remaining:0,offered:0,open:false});
+ assert.equal(dutyVacancy(d,offered,now).open,true);assert.equal(dutyVacancy(d,closed,now).open,false);
+ assert.equal(dutyVacancy(d,duty('free',{capacity:3}),now).remaining,3);
 });
