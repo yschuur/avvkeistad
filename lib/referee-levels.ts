@@ -8,3 +8,14 @@ export function isRefereeLevel(value:unknown):value is RefereeLevel {
 export function canReferee(member:unknown,required:unknown) {
  return isRefereeLevel(member)&&isRefereeLevel(required)&&REFEREE_LEVELS.indexOf(member)>=REFEREE_LEVELS.indexOf(required);
 }
+export function refereeScope(value:unknown):string {
+ if(!isRefereeLevel(value)) return 'Niet ingesteld';
+ if(['N2','N1'].includes(value)) return 't/m Superdivisie';
+ if(['R1','N3'].includes(value)) return 't/m 3e Divisie';
+ if(value==='R2') return 't/m Promotieklasse';
+ if(['V4','R2.2'].includes(value)) return 't/m 1e & 2e klasse (senioren) en Hoofdklasse (jeugd)';
+ return 'Overige klassen (senioren en jeugd)';
+}
+export function refereeDescription(value:unknown):string {
+ return isRefereeLevel(value)?`${refereeScope(value)} (${value})`:'Niet ingesteld';
+}

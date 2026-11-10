@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions } from '../lib/member-duties';
-import { REFEREE_LEVELS } from '../lib/referee-levels';
+import { REFEREE_LEVELS,refereeDescription } from '../lib/referee-levels';
 import type { AppData } from '../lib/data';
 import type { Duty,Profile,Enrollment } from '../lib/domain';
 const now=new Date('2027-01-01T12:00:00Z');
@@ -35,7 +35,7 @@ test('alle eigen spelers blijven zichtbaar met correcte licentiereden voor elk v
   assert.deepEqual(options.map(o=>o.profile.id),['me','teammate']);
   const option=options[0],eligible=REFEREE_LEVELS.indexOf(qualification)>=REFEREE_LEVELS.indexOf(required);
   assert.equal(option.reason===null,eligible,`${qualification} for ${required}`);
-  if(!eligible) {assert.match(option.reason!,/Niet de juiste scheidsrechterslicentie/);assert.ok(option.reason!.includes(`minimaal ${required} vereist`));}
+  if(!eligible) {assert.match(option.reason!,/Niet de juiste scheidsrechterslicentie/);assert.ok(option.reason!.includes(`minimaal ${refereeDescription(required)} vereist`));}
  }
  for(const qualification of [null,undefined,'onbekend']) {
   d.profiles[0]={...d.profiles[0],referee_qualification:qualification,referee_level:99};

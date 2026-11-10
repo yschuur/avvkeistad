@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { teamRefereeRequirement,clubRefereeRequired,keistadTeamKey,matchRefereeRequirement } from '../lib/competition-rules';
 test('competitieregels onderscheiden senioren, jeugd, divisies en Topdivisie',()=>{
- for(const age of ['youth','senior']) for(const level of ['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie','Derde divisie']) assert.equal(teamRefereeRequirement(age,level),'R1');
+ for(const age of ['youth','senior']) for(const level of ['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie']) assert.equal(teamRefereeRequirement(age,level),'N2');
+ for(const age of ['youth','senior']) assert.equal(teamRefereeRequirement(age,'Derde divisie'),'R1');
  for(const age of ['youth','senior']) assert.equal(teamRefereeRequirement(age,'Promotieklasse'),'R2');
  for(const level of ['Eerste klasse','Tweede klasse']) {
   assert.equal(teamRefereeRequirement('senior',level),'V4');
@@ -17,9 +18,9 @@ test('teamherkenning: sponsor, uit/thuis, interne wedstrijd, leeftijd en onbeken
  assert.equal(keistadTeamKey('Dames 2',true),'DS2');
  assert.equal(keistadTeamKey('Heren 1',true),'HS1');
  assert.equal(keistadTeamKey('Andere club DS 2'),null);
- assert.equal(matchRefereeRequirement({home_team:'Andere club DS 2',away_team:'AVV Keistad DS 2'},teams),'R1');
+ assert.equal(matchRefereeRequirement({home_team:'Andere club DS 2',away_team:'AVV Keistad DS 2'},teams),'N2');
  assert.equal(matchRefereeRequirement({home_team:'AVV Keistad MA 2',away_team:'Andere club MA 2'},teams),'V6');
- assert.equal(matchRefereeRequirement({home_team:'AVV Keistad MA 2',away_team:'AVV Keistad DS 2'},teams),'R1');
+ assert.equal(matchRefereeRequirement({home_team:'AVV Keistad MA 2',away_team:'AVV Keistad DS 2'},teams),'N2');
  assert.equal(matchRefereeRequirement({home_team:'AVV Keistad MA 2',away_team:'AVV Keistad DS 3'},teams),null);
  assert.equal(matchRefereeRequirement({home_team:'Test thuis',away_team:'Test uit'},teams),null);
  assert.equal(matchRefereeRequirement({home_team:'AVV Keistad MA 2',away_team:'Andere club'},[{...teams[1],competition_level:undefined}]),null,'Missing migration is not an unrestricted game');

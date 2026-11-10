@@ -30,7 +30,12 @@ test('Excel-teams vervangen atomair; automatische wedstrijdregels, rechten en be
   const pastDuty=(await row<{id:string}>("insert into duties(season_id,title,kind,starts_at,ends_at,location,points,capacity,required_level,required_qualification) values($1,'Afgelopen testdienst','referee',now()-interval '10 days',now()-interval '9 days','Testhal',2,1,1,'V6') returning id",[season])).id;
   for(const id of [weak,strong]) await db.query('insert into enrollments(duty_id,member_id) values($1,$2)',[excludedDuty,id]);
   await db.query('insert into enrollments(duty_id,member_id) values($1,$2)',[pastDuty,weak]);
-  await db.exec(migration);
+  await db.exec(migration);await db.exec(await readFile(new URL('../supabase/migrations/010_division_referee_levels.sql',import.meta.url),'utf8'));
+  for(const level of ['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie','Derde divisie','Promotieklasse']) {
+   const required=(await row<{code:string}>("select team_referee_requirement('senior',$1) as code",[level])).code;
+   assert.equal(required,level==='Derde divisie'?'R1':level==='Promotieklasse'?'R2':'N2');
+   for(const code of REFEREE_LEVELS) assert.equal((await row<{allowed:boolean}>('select referee_qualification_rank($1)>=referee_qualification_rank($2) as allowed',[code,required])).allowed,REFEREE_LEVELS.indexOf(code)>=REFEREE_LEVELS.indexOf(required as typeof code));
+  }
   // An unrecognized referenced team must stop the whole destructive import.
   await assert.rejects(db.exec(importSql),/Onbekend testteam/);await db.exec('rollback');
   assert.equal((await row<{n:number}>('select count(*)::int as n from teams where season_id=$1',[season])).n,2);
@@ -56,7 +61,7 @@ test('Excel-teams vervangen atomair; automatische wedstrijdregels, rechten en be
   const csv=(await readFile(new URL('../supabase/data/keistad-teams.csv',import.meta.url),'utf8')).trim().split(/\r?\n/).slice(1).map(line=>{const [name,level,age_class]=line.split(',');return {name,competition_level:level||null,age_class};}).sort((a,b)=>a.name<b.name?-1:1);
   assert.deepEqual(imported,csv,'All 57 names and levels exactly match the supplied worksheet, including blank levels');
   const distribution=(await db.query<{code:string;n:number}>('select team_referee_requirement(age_class,competition_level) as code,count(*)::int as n from teams where season_id=$1 group by 1 order by 1',[season])).rows;
-  assert.deepEqual(distribution,[{code:'R1',n:4},{code:'R2',n:2},{code:'V4',n:11},{code:'V6',n:40}]);
+  assert.deepEqual(distribution,[{code:'N2',n:4},{code:'R2',n:2},{code:'V4',n:11},{code:'V6',n:40}]);
   // Every imported team must derive the same rule in UI and database, also away.
   let day=20;
   for(const t of imported) {
@@ -131,9 +136,9 @@ test('Excel-teams vervangen atomair; automatische wedstrijdregels, rechten en be
   assert.equal((await row<{cancelled:boolean}>('select cancelled from duties where id=$1',[lowDuty])).cancelled,true);
   await as(null);assert.equal((await row<{n:number}>('select count(*)::int as n from enrollments where duty_id=$1 and not revoked',[lowDuty])).n,0);
   await db.query("update matches set home_team='AVV Keistad HS 1' where id=$1",[lowMatch]);
-  assert.equal((await row<{code:string}>('select required_qualification as code from duties where id=$1',[lowDuty])).code,'R1');
+  assert.equal((await row<{code:string}>('select required_qualification as code from duties where id=$1',[lowDuty])).code,'N2');
   // Reapplying schema/import leaves one exact catalogue, members and past points.
-  await db.exec(migration);await db.exec(importSql);
+  await db.exec(migration);await db.exec(await readFile(new URL('../supabase/migrations/010_division_referee_levels.sql',import.meta.url),'utf8'));await db.exec(importSql);
   assert.equal((await row<{n:number}>('select count(*)::int as n from teams where season_id=$1',[season])).n,57);
   assert.equal((await row<{n:number}>('select count(*)::int as n from memberships where season_id=$1',[season])).n,3);
   assert.equal((await row<{n:number}>('select count(*)::int as n from enrollments where duty_id=$1 and not revoked',[pastDuty])).n,1);

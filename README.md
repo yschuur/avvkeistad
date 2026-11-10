@@ -241,7 +241,7 @@ Het importscript vervangt uitsluitend de teams van het **actieve seizoen** door 
 | Jeugd hoofdklasse | V4 |
 | Overige en lege Excel-niveaus | V6 |
 
-Vanaf promotieklasse, inclusief alle divisies, worden geen clubdiensten aangemaakt. Dit geldt voor 6 Excel-teams (HS 1–3 en DS 1–3). De overige 51 teams vallen onder clubregels: 11 met minimum V4 en 40 met V6. De interne niveaugrenzen R1/R2 dienen uitsluitend om de uitsluiting vast te stellen, niet om hiervoor clubdiensten te maken. Een hoger ingesteld diploma voldoet ook; een niet-ingesteld diploma geeft geen fluitbevoegdheid.
+Vanaf promotieklasse, inclusief alle divisies, worden geen clubdiensten aangemaakt. Dit geldt voor 6 Excel-teams (HS 1–3 en DS 1–3). De overige 51 teams vallen onder clubregels: 11 met minimum V4 en 40 met V6. De interne niveaugrenzen N2/R1/R2 dienen uitsluitend om de uitsluiting vast te stellen, niet om hiervoor clubdiensten te maken. Een hoger ingesteld diploma voldoet ook; een niet-ingesteld diploma geeft geen fluitbevoegdheid.
 
 **Beheer → Teams en niveaus** toont alle teams van het actieve seizoen en laat beheerders het competitieniveau aanpassen. Wedstrijden vanaf promotieklasse tonen **Geen clubscheidsrechter nodig** en bieden geen aanmaakactie. Alle schrijfwegen, ook oudere RPC’s met een N1-keuze, weigeren hiervoor clubdiensten. Bij wedstrijden daaronder is het minimum automatisch en niet handmatig te verlagen. Sponsoring verandert de teamidentiteit niet. Ook een uitwedstrijd wordt gekoppeld aan het Keistad-team; bij twee Keistad-teams geldt het hoogste minimum. Een ontbrekend of dubbelzinnig team sluit aanmaken/inschrijven, in plaats van terug te vallen op V6. Algemene, niet aan een wedstrijd gekoppelde fluitdiensten houden een expliciet gekozen minimum; een gereserveerd vrijwilligersteam is niet het spelende team.
 
@@ -321,3 +321,7 @@ Een gewijzigde naam of puntenwaarde werkt door naar alle gekoppelde toekenningen
 De database controleert beheerrechten, een teamindeling in hetzelfde seizoen, de gekozen bron en unieke toewijzing. De punten en periode van gekoppelde regels zijn ook bij directe SQL-wijzigingen afgeleid van de bron; een aangeboden puntenwaarde kan die niet overschrijven. Toevoegen van meerdere groepsleden is atomair: een ongeldige keuze draait de hele toevoeging terug. Gewone leden lezen uitsluitend eigen toekenningen; aanvoerders lezen daarnaast hun eigen team volgens de bestaande RLS. Opslaan, toewijzen en intrekken worden gelogd. Migratie 009 is herhaalbaar en maakt geen voorbeeldgroepen of voorbeeldfuncties.
 
 Zonder 009 blijven bestaande ledeninstellingen en punten leesbaar; de nieuwe toewijs-/beheerformulieren tonen een migratiemelding en zijn uitgeschakeld. Database- en browsercontroles gebruiken uitsluitend lokale testgegevens en controleren punten, rechten, gegevensbehoud, selectie/herladen, beide toewijsroutes, dubbele toekenningen, foutterugval en mobiele bediening.
+
+## Bijgewerkte divisiegrenzen (010)
+
+Voer `supabase/migrations/010_division_referee_levels.sql` uit na 006 in de database van de app. Superdivisie, Topdivisie, Eerste en Tweede divisie vereisen N2 of N1; Derde divisie vereist R1 of hoger en Promotieklasse R2 of hoger. Vanaf promotieklasse blijven clubfluitdiensten uitgesloten. Bestaande inschrijvingen en punten blijven behouden. Aanvoerders zien competitietekst bij de licentie.

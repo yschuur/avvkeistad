@@ -4,7 +4,8 @@ import { REFEREE_LEVELS, type RefereeLevel } from './referee-levels';
 export const COMPETITION_LEVELS=['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie','Derde divisie','Promotieklasse','Hoofdklasse','Eerste klasse','Tweede klasse','Derde klasse','Vierde klasse','Overig'] as const;
 export const competitionLevelSchema=z.enum(COMPETITION_LEVELS);
 export function teamRefereeRequirement(age:string,level:string|null|undefined):RefereeLevel {
- if(['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie','Derde divisie'].includes(level ?? '')) return 'R1';
+ if(['Superdivisie','Topdivisie','Eerste divisie','Tweede divisie'].includes(level ?? '')) return 'N2';
+ if(level==='Derde divisie') return 'R1';
  if(level==='Promotieklasse') return 'R2';
  if((age==='senior' && ['Eerste klasse','Tweede klasse'].includes(level ?? '')) || (age==='youth' && level==='Hoofdklasse')) return 'V4';
  return 'V6';
