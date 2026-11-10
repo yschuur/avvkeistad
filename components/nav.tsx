@@ -16,6 +16,7 @@ function workspaceLinks(adminMode:boolean,captain:boolean) {
   {href:'/beheer/planning',label:'Planning',icon:ListChecks},
   {href:'/beheer/wedstrijden',label:'Wedstrijden',icon:Trophy},
   {href:'/beheer/functies',label:'Functies',icon:Award},
+  {href:'/beheer/functiegroepen',label:'Functiegroepen',icon:UsersRound},
   {href:'/beheer/rapportage',label:'Rapportage',icon:ChartNoAxesCombined},
   {href:'/beheer/seizoenen',label:'Seizoenen',icon:CalendarRange},
   {href:'/beheer/instellingen',label:'Instellingen',icon:SlidersHorizontal},

@@ -78,7 +78,7 @@ Controleer dat precies je eigen profiel admin is. Log vervolgens in op de app. S
 - Ook een vervanger heeft vanaf zijn eigen inschrijving 24 uur bedenktijd (tot aanvang).
 - Capaciteit, teamreservering, tijdsoverlap en scheidsrechtersniveau worden in PostgreSQL gecontroleerd. Databasevergrendeling voorkomt overboeking en dubbele overname.
 - Bardiensten en andere reguliere diensten: duur in uren = punten per persoon. Fluitdiensten: vaste puntenwaarde. Wekelijkse reeksen behouden hun lokale Nederlandse aanvangstijd bij zomer-/wintertijd.
-- Functietoekenningen geven meteen de expliciet gekozen punten voor de gekozen periode. Geen automatische proratering en geen autorisaties. Het wijzigen van een functiestandaard verandert bestaande toekenningen niet.
+- Functies en functiegroepen geven meteen hun vaste punten voor het volledige seizoen, zonder proratering of extra autorisaties. Het aanpassen van de puntenwaarde wijzigt alle gekoppelde toekenningen in datzelfde seizoen. Oude vrije toekenningen zonder koppeling behouden hun oorspronkelijke punten en periode.
 - Leden zien geen persoonsgegevens of inschrijvingen van willekeurige andere leden. Beschikbaarheid wordt als telling en anonieme overdracht-ID aangeboden. Aanvoerders zien hun team; beheerders zien de club.
 - RLS beschermt alle tabellen. Gewone accounts hebben geen directe schrijfrechten; mutaties lopen via gecontroleerde databasefuncties. De server-sleutel wordt uitsluitend na controle van adminrechten voor uitnodigingen gebruikt.
 - CSV-export beschermt spreadsheetcellen tegen formule-injectie.
@@ -255,11 +255,12 @@ Admin en beheerder gebruiken de schakelaar **Beheermodus** linksonder om naar he
 | Menuonderdeel | Beheer |
 |---|---|
 | Dashboard | Actief seizoen, actuele aantallen, open plaatsen en opvolglinks |
-| Leden | Zoekfunctie, teamfilter, teamindeling, diploma en persoonlijke norm; uitnodigen uitsluitend voor admin |
+| Leden | Zoekfunctie, teamindeling, diploma, norm en functies/groepen toewijzen; uitnodigen uitsluitend voor admin |
 | Teams | Teams toevoegen, competitieniveaus en fluitregels |
 | Planning | Diensten/reeksen aanmaken, toewijzen, annuleren en inschrijvingen corrigeren |
 | Wedstrijden | Nevobo-programma, synchroniseren, clubfluitdiensten en wijzigingslog |
-| Functies | Vrijwilligersfuncties en vaste punten toekennen/intrekken |
+| Functies | Losse functies aanmaken/bewerken en functies of functiegroepen toewijzen |
+| Functiegroepen | Groepen, vaste seizoenpunten en groepsleden beheren |
 | Rapportage | Punten, tekorten, teamfilter en CSV-export |
 | Seizoenen | Aanmaken, bewerken en activeren van seizoenen |
 | Instellingen | Huisstijl en toegang tot wedstrijd-/seizoensinstellingen |
@@ -304,3 +305,19 @@ select set_config('avv.test_member_password', '...', false);
 ```
 
 Deze optionele instelling gebruikt de bestaande Supabase-extensie `pgcrypto` om alleen voor **nieuwe** testaccounts een wachtwoordhash te maken. De sessie-instelling wordt na een succesvolle import gewist; herhalen reset geen bestaande wachtwoorden. Kies deze optie dus bij de eerste import als je met de dummyaccounts wilt inloggen. Het overzicht na afloop toont de aanvoerdersadressen; de overige testadressen staan onder Beheer → Leden. De tests controleren SQL/identities, e-mailbevestiging, UUID-formaat, wachtwoordhash, alle 57 teams, rechten, veilig herhalen en rollback met uitsluitend lokale testdata. Er worden daarmee geen live gebruikers aangemaakt of live aanmeldingen bevestigd.
+
+## Functies en functiegroepen (009)
+
+Voer `supabase/migrations/009_function_groups.sql` uit in de Supabase-database van deze app. Deze migratie bouwt voort op 001; voer 001 niet opnieuw uit. Zij bewaart bestaande vrije functietoekenningen inclusief punten en periode. Groepen, losse functies en toewijzingen zijn per seizoen; er wordt geen fictieve catalogus aangemaakt en niets automatisch naar een volgend seizoen gekopieerd.
+
+- **Beheer → Functiegroepen**: maak een groep aan met een naam en vaste punten per lid per seizoen. Na opslaan staat die groep open om leden toe te voegen. Via Beheren kun je de naam/punten aanpassen, groepsleden bekijken, meerdere leden zoeken/selecteren/toevoegen en een lid uit de groep verwijderen.
+- **Beheer → Functies**: maak losse functies aan of bewerk ze. In het toewijsformulier kies je een lid met een teamindeling in het actieve seizoen en daarna een functie of functiegroep. Punten en datums worden uit de gekozen instelling en het seizoen overgenomen.
+- **Beheer → Leden → Functie toewijzen** (ook onder Instellen): het geselecteerde lid krijgt onder zijn instellingen hetzelfde keuzemenu met Functies en Functiegroepen. Daar staan ook de bestaande toekenningen van dat lid, die je afzonderlijk kunt intrekken. Na opslaan blijft het juiste lid geselecteerd.
+
+Groepslidmaatschap wordt als één gekoppelde regel in `function_assignments` opgeslagen; er is geen tweede, losstaande puntentoekenning. Een lid krijgt dezelfde functie of groep maximaal één keer per seizoen, ook bij dubbel klikken of toewijzen via verschillende schermen. Een lid kan meerdere verschillende functies en groepen hebben; hun punten tellen op in het bestaande persoonlijke/teamoverzicht en de rapportage. De app haalt ook meer dan 1000 toekenningen volledig op.
+
+Een gewijzigde naam of puntenwaarde werkt door naar alle gekoppelde toekenningen van die functie/groep in hetzelfde seizoen. Andere seizoenen en oudere vrije toekenningen worden niet bijgewerkt. Uit een groep verwijderen trekt alleen die groepspunten in, zonder een losse functie of andere groep te wijzigen. Een functie of groep geeft geen beheerrechten.
+
+De database controleert beheerrechten, een teamindeling in hetzelfde seizoen, de gekozen bron en unieke toewijzing. De punten en periode van gekoppelde regels zijn ook bij directe SQL-wijzigingen afgeleid van de bron; een aangeboden puntenwaarde kan die niet overschrijven. Toevoegen van meerdere groepsleden is atomair: een ongeldige keuze draait de hele toevoeging terug. Gewone leden lezen uitsluitend eigen toekenningen; aanvoerders lezen daarnaast hun eigen team volgens de bestaande RLS. Opslaan, toewijzen en intrekken worden gelogd. Migratie 009 is herhaalbaar en maakt geen voorbeeldgroepen of voorbeeldfuncties.
+
+Zonder 009 blijven bestaande ledeninstellingen en punten leesbaar; de nieuwe toewijs-/beheerformulieren tonen een migratiemelding en zijn uitgeschakeld. Database- en browsercontroles gebruiken uitsluitend lokale testgegevens en controleren punten, rechten, gegevensbehoud, selectie/herladen, beide toewijsroutes, dubbele toekenningen, foutterugval en mobiele bediening.

@@ -1,3 +1,5 @@
+import type { FunctionCatalog } from '@/lib/functions';
+import { functionMembers } from '@/components/function-management';
 import { TeamDutyAssignment } from '@/components/team-duty-assignment';
 import { FilterPanel } from '@/components/filter-panel';
 import { TableCell } from '@/components/responsive-table';
@@ -11,7 +13,7 @@ import { SubmitButton } from '@/components/submit-button';
 import { ConfirmSubmitButton } from '@/components/confirm-submit-button';
 import { CompetitionLevelSelect } from '@/components/competition-level-select';
 import { RefereeLevelSelect } from '@/components/referee-level-select';
-import { createTeam,createDuty,setDutyQualification,assignFunction,enroll,invite,changeEnrollment,cancelDuty,saveFunction,removeFunction } from '@/app/actions';
+import { createTeam,createDuty,setDutyQualification,enroll,invite,changeEnrollment,cancelDuty } from '@/app/actions';
 function Field({label,name,type='text',value,required=true,min,max,step}:{label:string;name:string;type?:string;value?:string|number;required?:boolean;min?:number;max?:number;step?:string}) {return <label>{label}<input name={name} type={type} defaultValue={value} required={required} min={min} max={max} step={step}/></label>;}
 function context(data:AppData) {
  const s=data.season,seasonInput=<input type="hidden" name="season_id" value={s?.id ?? ''}/>;
@@ -36,22 +38,14 @@ export function DutyCreateSection({data,refereePoints}:{data:AppData;refereePoin
  const {s,seasonInput,teamOptions}=context(data);
  return <section id="dienst-aanmaken" className="panel wide"><h2>Dienst of wekelijkse reeks aanmaken</h2><p className="muted small">Tijden zijn Nederlandse tijden. Een reeks herhaalt wekelijks op dezelfde lokale tijd. Voor reguliere diensten geldt 1 uur = 1 punt per deelnemer; fluitdiensten gebruiken de standaardpunten uit Instellingen → Diensten. Maak fluitdiensten voor wedstrijden via <Link href="/beheer/wedstrijden">Wedstrijden</Link>; daar wordt het vereiste niveau automatisch bepaald.</p><p className="field-help">{refereePoints!==null?`Fluitdienst: ${refereePoints} punten per deelnemer.`:"Voer migratie 008 uit om diensten aan te maken en standaardpunten in te stellen."}</p><form action={createDuty}>{seasonInput}<fieldset disabled={!s||refereePoints===null} className="form-grid three"><Field label="Titel" name="title"/><label>Soort<select name="kind"><option value="bar">Bardienst</option><option value="referee">Fluitdienst</option><option value="event">Evenement</option><option value="lines">Vlaggen</option></select></label><Field label="Locatie" name="location"/><Field label="Begint op" name="start" type="datetime-local"/><Field label="Eindigt op" name="end" type="datetime-local"/><Field label="Aantal deelnemers" name="capacity" type="number" min={1} max={100} value={2}/><div><RefereeLevelSelect id="duty-referee-level" label="Vereist scheidsrechtersniveau" optional/><p className="field-help">Alleen verplicht bij een fluitdienst.</p></div><Field label="Aantal weken (1 = eenmalig)" name="repeat" type="number" min={1} max={53} value={1}/><div className="team-assignment-field"><label htmlFor="new-duty-team">Toewijzen aan team</label><select id="new-duty-team" name="team_id"><option value="">Open voor alle teams</option>{teamOptions}</select></div><SubmitButton className="button">Diensten aanmaken</SubmitButton></fieldset></form></section>;
 }
-export function MemberSection({data,params={}}:{data:AppData;params?:Record<string,string|undefined>}) {
+export function MemberSection({data,params={},catalog}:{data:AppData;params?:Record<string,string|undefined>;catalog:FunctionCatalog}) {
  const {s}=context(data);
- return <section className="panel" id="lidinstellen"><h2>Lid instellen</h2><MemberEditor key={params.member ?? 'first'} initialMember={params.member} profiles={data.profiles} memberships={data.memberships} teams={data.teams} season={s?.id ?? ""} disabled={!s}/></section>;
-}
-export function FunctionGrantSection({data,params={}}:{data:AppData;params?:Record<string,string|undefined>}) {
- const {s,seasonInput,memberOptions}=context(data);
- return <section className="panel"><h2>Vrijwilligersfunctie toekennen</h2><p className="muted small">De punten worden direct toegekend voor de opgegeven periode. Deze functie geeft geen beheerrechten.</p><form action={assignFunction}>{seasonInput}<fieldset disabled={!s} className="stack-form"><label>Lid<select name="member_id" required>{memberOptions}</select></label><Field label="Functie" name="title"/><Field label="Toegekende punten voor deze periode" name="points" type="number" min={0} step="0.25"/><div className="form-grid"><Field label="Vanaf" name="start" type="date" value={s?.starts_on}/><Field label="Tot en met" name="end" type="date" value={s?.ends_on}/></div><SubmitButton className="button">Functie toekennen</SubmitButton></fieldset></form></section>;
+ return <section className="panel" id="lidinstellen"><h2>Lid instellen</h2><MemberEditor key={params.member ?? 'first'} initialMember={params.member} profiles={data.profiles} memberships={data.memberships} teams={data.teams} season={s?.id ?? ""} disabled={!s} functions={data.functions} groups={catalog.groups} assignments={data.assignments} functionMembers={functionMembers(data)} functionsAvailable={catalog.available}/></section>;
 }
 export function InviteSection({data,params={}}:{data:AppData;params?:Record<string,string|undefined>}) {
  const {s,seasonInput,teamOptions}=context(data);
  if(data.profile.role!=='admin') return null;
  return <section className="panel wide"><h2>Account uitnodigen</h2><p className="muted small">Het lid of de beheerder ontvangt een persoonlijke uitnodiging per e-mail. Voor leden zijn team en Nevobo-code verplicht.</p><form action={invite}>{seasonInput}<fieldset disabled={false} className="form-grid three"><Field label="Voornaam" name="first"/><Field label="Achternaam" name="last"/><Field label="E-mailadres" name="email" type="email"/><label>Autorisatie<select name="role"><option value="member">Lid</option><option value="manager">Beheerder</option></select></label><Field label="Nevobo-code (verplicht voor lid)" name="code" required={false}/><label>Team<select name="team_id"><option value="">Geen team (alleen beheerder)</option>{teamOptions}</select></label><SubmitButton className="button">Uitnodiging versturen</SubmitButton></fieldset></form></section>;
-}
-export function FunctionDefinitionsSection({data,params={}}:{data:AppData;params?:Record<string,string|undefined>}) {
- const {s,seasonInput}=context(data);
- return <section className="panel wide"><h2>Functies en vaste punten</h2><form action={saveFunction}>{seasonInput}<fieldset disabled={!s} className="inline-form"><Field label="Functienaam" name="title"/><Field label="Standaardpunten" name="points" type="number" min={0} step="0.25"/><SubmitButton className="button">Functie opslaan</SubmitButton></fieldset></form><p className="muted small">{data.functions.map(f=>`${f.title}: ${f.points} punten`).join(' · ') || 'Nog geen functies ingesteld.'} Bestaande toekenningen veranderen niet als je de standaardpunten wijzigt.</p><h3 className="subheading">Toegekende functies</h3>{!data.assignments.length && <p className="empty-state">Geen functies toegekend.</p>}{data.assignments.map(a=>{const p=data.profiles.find(p=>p.id===a.member_id);return <form action={removeFunction} className="correction-row" key={a.id}><input type="hidden" name="assignment_id" value={a.id}/><span><strong>{a.title} · {a.points} punten</strong><small>{p?.first_name} {p?.last_name}</small></span><ConfirmSubmitButton className="button secondary danger" question="Deze functietoekenning intrekken? De bijbehorende punten vervallen.">Toekenning intrekken</ConfirmSubmitButton></form>;})}</section>;
 }
 export function PlanningSection({data,teamAssignmentAvailable=false}:{data:AppData;teamAssignmentAvailable?:boolean}) {
  const {memberOptions}=context(data);

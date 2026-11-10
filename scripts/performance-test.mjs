@@ -43,6 +43,14 @@ let syncState={last_started_at:null,last_success_at:null,last_error_code:null,fe
 const records=[];
 const authWrites=[];
 let refereePoints=2,dutySettingsMissing=false;
+let testFunctions=[],testFunctionGroups=[],testAwards=[],functionMigrationMissing=false,functionVersion=0;
+const nextFunctionId=()=>`61000000-0000-4000-8000-${String(++functionVersion).padStart(12,'0')}`;
+const assignFunctionFixture=(memberId,kind,choice)=>{
+ const source=(kind==='group'?testFunctionGroups:testFunctions).find(item=>item.id===choice),key=kind==='group'?'group_id':'definition_id';
+ let existing=testAwards.find(a=>a.member_id===memberId&&a[key]===choice);
+ if(!existing) {existing={id:nextFunctionId(),member_id:memberId,season_id:season,title:source.title,points:source.points,starts_on:initialSeason.starts_on,ends_on:initialSeason.ends_on,group_id:kind==='group'?choice:null,definition_id:kind==='function'?choice:null};testAwards.push(existing);}
+ return existing.id;
+};
 const passwords=new Map([['anna@example.test','local-test-password'],['bram@example.test','local-test-password'],['admin@example.test','local-test-password']]);
 let mockUrl;
 const refereeQualifications=new Map([[memberA,'V6'],[memberB,'N1']]);
@@ -110,6 +118,16 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/create_team_match_duty') {
   const input=JSON.parse(body);testMatch.referee_duties=[{id:testDuty.id,kind:'referee',cancelled:false,points:refereePoints,assigned_team_id:input.p_team}];return res.end(JSON.stringify(testDuty.id));
  }
+ if(url.pathname==='/rest/v1/rpc/save_season_function') {
+  const input=JSON.parse(body),items=input.p_group?testFunctionGroups:testFunctions;
+  let item=items.find(item=>item.id===input.p_id);
+  if(item) Object.assign(item,{title:input.p_title,points:input.p_points});else {item={id:nextFunctionId(),season_id:input.p_season,title:input.p_title,points:input.p_points};items.push(item);}
+  for(const a of testAwards) if(input.p_group?a.group_id===item.id:a.definition_id===item.id) Object.assign(a,{title:item.title,points:item.points});
+  return res.end(JSON.stringify(item.id));
+ }
+ if(url.pathname==='/rest/v1/rpc/assign_season_function') {const input=JSON.parse(body);return res.end(JSON.stringify(assignFunctionFixture(input.p_member,input.p_kind,input.p_choice)));}
+ if(url.pathname==='/rest/v1/rpc/add_function_group_members') {const input=JSON.parse(body);for(const memberId of input.p_members) assignFunctionFixture(memberId,'group',input.p_group);return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/remove_function') {testAwards=testAwards.filter(a=>a.id!==JSON.parse(body).p_assignment);return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_duty_settings') {refereePoints=JSON.parse(body).p_referee_points;return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/assign_duty_team') {
   const input=JSON.parse(body),duty=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);if(duty) duty.assigned_team_id=input.p_team;
@@ -172,6 +190,12 @@ const mock=createServer(async(req,res)=>{
   if(dutySettingsMissing) {res.statusCode=404;return res.end(JSON.stringify({code:'42P01',message:'missing duty_settings'}));}
   result=req.headers.accept?.includes('vnd.pgrst.object')?{referee_points:refereePoints}:[{referee_points:refereePoints}];
  }
+ if(url.pathname==='/rest/v1/function_groups') {
+  if(functionMigrationMissing) {res.statusCode=404;return res.end(JSON.stringify({code:'PGRST205',message:'missing function_groups'}));}
+  result=testFunctionGroups.filter(g=>g.season_id===url.searchParams.get('season_id')?.replace('eq.',''));
+ }
+ if(url.pathname==='/rest/v1/function_definitions') result=testFunctions;
+ if(url.pathname==='/rest/v1/function_assignments') {const memberId=url.searchParams.get('member_id')?.replace('eq.',''),rows=testAwards.filter(a=>!memberId||a.member_id===memberId),from=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??500);result=rows.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${rows.length}`:`*/${rows.length}`);}
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
@@ -236,7 +260,8 @@ try {
  await expectRedirect('/beheer',cookieA,'/');
  await expectRedirect('/beheer/instellingen/huisstijl',cookieA,'/');
  await expectRedirect('/beheer/instellingen/diensten',cookieA,'/');
- for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
+ await expectRedirect('/beheer/functiegroepen',cookieA,'/');
+ for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group=61000000-0000-4000-8000-000000000099','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
  await expectRedirect('/',null,'/login');
  // A forged member ID in the cookie must not be trusted or reach the database.
  const forgedCookie=cookieA.split('; ').map(part=>{
@@ -387,7 +412,7 @@ try {
  await adminPage.getByRole('heading',{name:'Beheerdashboard',exact:true}).waitFor();
  assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
  const managementNav=adminPage.getByRole('navigation',{name:'Beheernavigatie'});
- assert.deepEqual(await managementNav.getByRole('link').allTextContents(),['Dashboard','Leden','Teams','Planning','Wedstrijden','Functies','Rapportage','Seizoenen','Instellingen']);
+ assert.deepEqual(await managementNav.getByRole('link').allTextContents(),['Dashboard','Leden','Teams','Planning','Wedstrijden','Functies','Functiegroepen','Rapportage','Seizoenen','Instellingen']);
  assert.equal(await managementNav.getByRole('link',{name:'Dashboard',exact:true}).getAttribute('aria-current'),'page');
  await adminPage.reload();assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
  await modeSwitch.click();await adminPage.waitForURL(base+'/');
@@ -409,7 +434,7 @@ try {
  await adminPage.getByRole('button',{name:'Filteren',exact:true}).click();
  await adminPage.getByText('1 gevonden',{exact:true}).waitFor();
  assert.equal(await adminPage.getByRole('region',{name:'Ledenoverzicht'}).getByRole('row').count(),2);
- console.log('Beheeromgeving: toggle, URL/herladen/terug, negen menuonderdelen, manager/admin-grenzen, ledenzoekfunctie en lidselectie geslaagd. Alleen lokale testgegevens.');
+ console.log('Beheeromgeving: toggle, URL/herladen/terug, tien menuonderdelen, manager/admin-grenzen, ledenzoekfunctie en lidselectie geslaagd. Alleen lokale testgegevens.');
  // Season creation/editing must have separate identities and keep unsaved input
  // on a server rejection; activation is explicit and cancellable.
  await adminPage.getByRole('navigation',{name:'Beheernavigatie'}).getByRole('link',{name:'Seizoenen',exact:true}).click();
@@ -798,11 +823,65 @@ try {
  assert.equal(await page.getByRole('heading',{name:'Wijzigingslog',exact:true}).count(),0);
  console.log('Wijzigingslog geslaagd: oude/nieuwe waarden, filters, paginering over 27 wijzigingen, lege selectie, ontbrekende tabel en ledenafscherming. Alleen lokale testgegevens.');
  console.log('Nevobo-integratie geslaagd: echt aangeleverd RSS-item, beveiligde cronroute, handmatige sync, wijzigingsmail, idempotentie en behoud bij bronfout. RSS en Resend uitsluitend lokaal nagebootst.');
+ // Season functions and group membership award fixed points through both entry points.
+ const submitFunction=async(p,path,button,touch=false)=>{await Promise.all([p.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname===path),touch?button.tap():button.click()]);await p.waitForLoadState('networkidle');await p.locator('button[aria-busy=true]').waitFor({state:'hidden'});await p.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();};
+ await adminPage.goto(base+'/beheer/functiegroepen');
+ await adminPage.getByLabel('Groepsnaam',{exact:true}).fill('Testcommissie');
+ await adminPage.getByLabel('Punten per lid per seizoen',{exact:true}).fill('5');
+ await submitFunction(adminPage,'/beheer/functiegroepen',adminPage.getByRole('button',{name:'Functiegroep opslaan',exact:true}));
+ const groupId=testFunctionGroups[0].id;assert.equal(new URL(adminPage.url()).searchParams.get('group'),groupId);
+ await adminPage.getByLabel('Leden zoeken',{exact:true}).fill('Anna');await adminPage.getByLabel(/Anna Test/).check();
+ await adminPage.getByLabel('Leden zoeken',{exact:true}).fill('Bram');await adminPage.getByLabel(/Bram Test/).check();
+ await submitFunction(adminPage,'/beheer/functiegroepen',adminPage.getByRole('button',{name:'Leden toevoegen',exact:true}));
+ assert.equal(testAwards.filter(a=>a.group_id===groupId).length,2);
+ await adminPage.reload();await adminPage.getByRole('heading',{name:'Leden van Testcommissie',exact:true}).waitFor();
+ await adminPage.goto(base+'/beheer/functies');
+ await adminPage.getByLabel('Functienaam',{exact:true}).fill('Losse testfunctie');
+ await adminPage.getByLabel('Punten per lid per seizoen',{exact:true}).fill('4');
+ await submitFunction(adminPage,'/beheer/functies',adminPage.getByRole('button',{name:'Functie opslaan',exact:true}));
+ const functionId=testFunctions[0].id;
+ const globalAssignment=adminPage.getByRole('button',{name:'Toewijzen',exact:true}).locator('xpath=ancestor::form');
+ await globalAssignment.getByLabel('Lid',{exact:true}).selectOption(memberA);
+ await globalAssignment.getByLabel('Functie of functiegroep',{exact:true}).selectOption('function:'+functionId);
+ await submitFunction(adminPage,'/beheer/functies',globalAssignment.getByRole('button',{name:'Toewijzen',exact:true}));
+ await globalAssignment.getByLabel('Lid',{exact:true}).selectOption(admin);
+ await globalAssignment.getByLabel('Functie of functiegroep',{exact:true}).selectOption('group:'+groupId);
+ await submitFunction(adminPage,'/beheer/functies',globalAssignment.getByRole('button',{name:'Toewijzen',exact:true}));
+ await adminPage.goto(base+'/beheer/leden');
+ await adminPage.getByRole('link',{name:'Functie of groep toewijzen aan Bram Test',exact:true}).click();
+ await adminPage.waitForURL(url=>url.searchParams.get('member')===memberB&&url.hash==='#lidfuncties');
+ await adminPage.locator('.member-function-section').getByRole('button',{name:'Uit groep verwijderen',exact:true}).click();
+ await submitFunction(adminPage,'/beheer/leden',adminPage.getByRole('dialog',{name:'Actie bevestigen'}).getByRole('button',{name:'Bevestigen',exact:true}));
+ assert.equal(new URL(adminPage.url()).searchParams.get('member'),memberB);
+ const memberAssignment=adminPage.locator('.member-function-section').getByRole('button',{name:'Toewijzen',exact:true}).locator('xpath=ancestor::form');
+ await memberAssignment.getByLabel('Functie of functiegroep',{exact:true}).selectOption('group:'+groupId);
+ await submitFunction(adminPage,'/beheer/leden',memberAssignment.getByRole('button',{name:'Toewijzen',exact:true}));
+ await memberAssignment.getByLabel('Functie of functiegroep',{exact:true}).selectOption('function:'+functionId);
+ await submitFunction(adminPage,'/beheer/leden',memberAssignment.getByRole('button',{name:'Toewijzen',exact:true}));
+ assert.equal(await memberAssignment.getByLabel('Functie of functiegroep',{exact:true}).locator(`option[value="group:${groupId}"]`).isDisabled(),true);
+ assert.equal(testAwards.filter(a=>a.member_id===memberB&&a.group_id===groupId).length,1);
+ await adminPage.goto(base+'/beheer/functiegroepen?group='+groupId);
+ await adminPage.getByLabel('Punten per lid per seizoen',{exact:true}).fill('7');
+ await submitFunction(adminPage,'/beheer/functiegroepen',adminPage.getByRole('button',{name:'Functiegroep opslaan',exact:true}));
+ assert.ok(testAwards.filter(a=>a.group_id===groupId).every(a=>a.points===7));
+ const groupMemberRow=adminPage.locator('.correction-row').filter({hasText:'Alex Test'});
+ await groupMemberRow.getByRole('button',{name:'Uit groep verwijderen',exact:true}).click();
+ await submitFunction(adminPage,'/beheer/functiegroepen',adminPage.getByRole('dialog',{name:'Actie bevestigen'}).getByRole('button',{name:'Bevestigen',exact:true}));
+ assert.equal(new URL(adminPage.url()).searchParams.get('group'),groupId);assert.equal(testAwards.some(a=>a.member_id===admin&&a.group_id===groupId),false);
+ await adminPage.goto(base+'/beheer/functies?function='+functionId);
+ await adminPage.getByLabel('Punten per lid per seizoen',{exact:true}).fill('6');
+ await submitFunction(adminPage,'/beheer/functies',adminPage.getByRole('button',{name:'Functie opslaan',exact:true}));
+ await page.goto(base+'/');assert.equal(await page.getByRole('progressbar',{name:'Behaalde punten'}).getAttribute('aria-valuenow'),'13');
+ functionMigrationMissing=true;await adminPage.goto(base+'/beheer/functiegroepen');
+ await adminPage.getByRole('alert').filter({hasText:'Voer migratie 009_function_groups.sql uit'}).waitFor();
+ assert.equal(await adminPage.getByRole('button',{name:'Functiegroep opslaan',exact:true}).isDisabled(),true);
+ functionMigrationMissing=false;
+ console.log('Functies en functiegroepen geslaagd: aanmaken/bewerken, groepsleden zoeken en selecteren, vaste seizoenpunten, beide soorten toewijzen via Functies en Leden, intrekken, geen dubbele toekenningen, puntenoverzicht en migratieterugval. Alleen lokale testgegevens.');
  const screenshots=process.env.SCREENSHOT_DIR;
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [320,390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
      const mobileMenu=adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true});
@@ -817,7 +896,7 @@ try {
      }
      const largeCorners=await adminPage.locator('.panel,.button,input:not([type=checkbox]),select,.badge,.table-wrap,.duty-card,.nav-link').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&parseFloat(getComputedStyle(el).borderTopLeftRadius)>4).map(el=>el.className));
      assert.deepEqual(largeCorners,[],`Unexpected radius ${width} ${path}`);
-     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/functies'?'functies':path.startsWith('/beheer/functiegroepen?')?'functiegroep-leden':path==='/beheer/functiegroepen'?'functiegroepen':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  // The same visible top-left trigger opens the left drawer in both workspaces.
@@ -880,6 +959,19 @@ try {
  assert.equal(await touch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await mobile.close();extraDuties=[];extraEnrollments=[];
  const mobileAdmin=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
  await mobileAdmin.addCookies(await adminPage.context().cookies());const manageTouch=await mobileAdmin.newPage();manageTouch.setDefaultTimeout(10000);
+ await manageTouch.goto(base+'/beheer/functiegroepen');
+ await manageTouch.getByLabel('Groepsnaam',{exact:true}).fill('Mobiele testgroep');
+ await manageTouch.getByLabel('Punten per lid per seizoen',{exact:true}).fill('2');
+ await submitFunction(manageTouch,'/beheer/functiegroepen',manageTouch.getByRole('button',{name:'Functiegroep opslaan',exact:true}),true);
+ const touchGroupId=testFunctionGroups.find(g=>g.title==='Mobiele testgroep').id;
+ await manageTouch.getByLabel('Leden zoeken',{exact:true}).fill('Bram');await manageTouch.getByLabel(/Bram Test/).check();
+ await submitFunction(manageTouch,'/beheer/functiegroepen',manageTouch.getByRole('button',{name:'Leden toevoegen',exact:true}),true);
+ assert.ok(testAwards.some(a=>a.member_id===memberB&&a.group_id===touchGroupId));
+ await manageTouch.goto(base+'/beheer/leden?member='+memberA);
+ const touchAward=manageTouch.locator('.member-function-section').getByRole('button',{name:'Toewijzen',exact:true}).locator('xpath=ancestor::form');
+ await touchAward.getByLabel('Functie of functiegroep',{exact:true}).selectOption('group:'+touchGroupId);
+ await submitFunction(manageTouch,'/beheer/leden',touchAward.getByRole('button',{name:'Toewijzen',exact:true}),true);
+ assert.ok(testAwards.some(a=>a.member_id===memberA&&a.group_id===touchGroupId));
  await manageTouch.goto(base+'/beheer/leden');const mobileMembers=manageTouch.getByRole('region',{name:'Ledenoverzicht'});
  assert.equal(await mobileMembers.evaluate(el=>el.scrollWidth<=el.clientWidth+1),true);
  assert.equal(await mobileMembers.locator('.mobile-cell-label').first().isVisible(),true);

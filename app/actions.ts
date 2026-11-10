@@ -170,7 +170,7 @@ export async function saveFunction(f: FormData) {
   await run('/beheer/functies', async () => {const {db}=await manager();const {error}=await db.rpc('save_function',{p_season:id.parse(f.get('season_id')),p_title:z.string().min(1).parse(text(f,'title')),p_points:z.number().min(0).parse(number(f.get('points')))});if(error) throw new Error(error.message);});
 }
 export async function removeFunction(f: FormData) {
-  await run('/beheer/functies', async () => {const {db}=await manager();const {error}=await db.rpc('remove_function',{p_assignment:id.parse(f.get('assignment_id'))});if(error) throw new Error(error.message);});
+  await run(functionReturnPath(f), async () => {const {db}=await manager();const {error}=await db.rpc('remove_function',{p_assignment:id.parse(f.get('assignment_id'))});if(error) throw new Error(error.message);});
 }
 
 export async function saveBranding(f: FormData) {
@@ -257,3 +257,42 @@ export async function saveDutySettings(f:FormData) {
   if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om standaardpunten op te slaan.':error.message);
  });
 }
+
+function functionReturnPath(f:FormData) {
+ const member=id.safeParse(f.get('member_id')),group=id.safeParse(f.get('group_id'));
+ if(text(f,'return_to')==='/beheer/leden'&&member.success) return '/beheer/leden?member='+member.data;
+ if(text(f,'return_to')==='/beheer/functiegroepen'&&group.success) return '/beheer/functiegroepen?group='+group.data;
+ return '/beheer/functies';
+}
+const functionMigrationError=(error:{code?:string;message:string})=>error.code==='PGRST202'?'Voer migratie 009_function_groups.sql uit om functies en functiegroepen te beheren.':error.code==='23505'?'Er bestaat al een functie of functiegroep met deze naam in dit seizoen.':error.message;
+export async function assignSeasonFunction(f:FormData) {
+ await run(functionReturnPath(f),async()=>{
+  const {db}=await manager();const [kind,choice,...rest]=text(f,'choice').split(':');
+  if(rest.length) throw new Error('Kies een functie of functiegroep.');
+  const {error}=await db.rpc('assign_season_function',{p_member:id.parse(f.get('member_id')),p_season:id.parse(f.get('season_id')),p_kind:z.enum(['function','group']).parse(kind),p_choice:id.parse(choice)});
+  if(error) throw new Error(functionMigrationError(error));
+ });
+}
+export async function addFunctionGroupMembers(f:FormData) {
+ await run(functionReturnPath(f),async()=>{
+  const {db}=await manager();const members=z.array(id).min(1).max(1000).parse(f.getAll('member_ids'));
+  const {error}=await db.rpc('add_function_group_members',{p_group:id.parse(f.get('group_id')),p_members:members});
+  if(error) throw new Error(functionMigrationError(error));
+ });
+}
+async function saveFunctionItem(f:FormData,isGroup:boolean) {
+ const base=isGroup?'/beheer/functiegroepen':'/beheer/functies';
+ if(!configured()) redirect(base+'?error='+encodeURIComponent('De applicatie is nog niet ingesteld.'));
+ let saved=id.safeParse(f.get('definition_id')),errorMessage:string|null=null;
+ try {
+  const {db}=await manager();
+  if(text(f,'definition_id')&&!saved.success) id.parse(f.get('definition_id'));
+  const {data,error}=await db.rpc('save_season_function',{p_season:id.parse(f.get('season_id')),p_id:saved.success?saved.data:null,p_title:z.string().min(1).max(200).parse(text(f,'title')),p_points:z.number().min(0).max(999999.99).parse(number(f.get('points'))),p_group:isGroup});
+  if(error) throw new Error(functionMigrationError(error));saved=id.safeParse(data);
+ }catch(error){errorMessage=error instanceof z.ZodError?'Controleer de naam en punten.':error instanceof Error?error.message:'Opslaan is niet gelukt.';}
+ revalidatePath('/','layout');
+ const params=new URLSearchParams();if(saved.success) params.set(isGroup?'group':'function',saved.data);
+ params.set(errorMessage?'error':'success',errorMessage??'Opgeslagen');redirect(base+'?'+params.toString());
+}
+export async function saveSeasonFunction(f:FormData) {await saveFunctionItem(f,false);}
+export async function saveFunctionGroup(f:FormData) {await saveFunctionItem(f,true);}
