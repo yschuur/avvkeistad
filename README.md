@@ -341,3 +341,6 @@ Beheer heeft een uitklapbaar Diensten-menu met Wedstrijden, Bardiensten, Eveneme
 ## Bardienstenset tot eind 2026
 
 Voer `scripts/seed-bar-duties-2026.sql` handmatig uit in de app-database. Het script voegt komende bardiensten op dinsdag, donderdag, vrijdag en zaterdag van 10 november t/m 31 december 2026 toe in het actieve seizoen, locatie Sportcomplex Amerena. Er zijn wisselende tijden, diensten van 1½ tot 3 uur en 1–3 deelnemers, regelmatig meerdere per dag. Punten volgen de werkelijke duur. Het actieve seizoen moet de periode omvatten. Verstreken tijden worden overgeslagen; herhalen bewaart bestaande diensten en inschrijvingen en maakt geen dubbele set. Dit is expliciet aangevraagde data, geen automatische migratie of applicatiedemo.
+
+### Aanvoerdersteller en volledig dienstbeheer
+Voer na de bestaande migraties ook `014_captain_team_duty_count.sql` en `015_duty_management.sql` uit in de SQL Editor van de database die de app gebruikt. 014 levert de eigen teller voor aanvoerders. 015 maakt het aanpassen van komende diensten mogelijk (titel, locatie, tijden en bezetting), met controle op overlap en seizoen, auditlog en een melding aan deelnemers. Wedstrijdgegevens blijven uit Nevobo komen. Verwijderen annuleert een dienst; bestaande inschrijvingen en historie worden bewaard en tellen niet meer mee voor punten.

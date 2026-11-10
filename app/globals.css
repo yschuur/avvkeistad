@@ -619,3 +619,42 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .member-group-total { margin-top: var(--space-3); margin-bottom: var(--space-2); font-size: 12px; }
 .member-function-groups .section-heading { flex-wrap: wrap; align-items: baseline; }
 .member-function-groups .section-heading > span { min-width: 0; overflow-wrap: anywhere; }
+
+.team-duty-count { display: inline-flex; justify-content: center; align-items: center; min-width: 20px; height: 20px; padding: 0 var(--space-1); margin-left: auto; border-radius: var(--radius); background: var(--danger); color: var(--surface); font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.mobile-nav-link .team-duty-count { position: absolute; top: 4px; right: calc(50% - 28px); height: 18px; margin: 0; }
+.team-mobile-label, .team-mobile-qualification { display: none; }
+@media (max-width: 768px) {
+ .team-points-table { overflow: visible; }
+ .team-points-table table { width: 100%; table-layout: fixed; white-space: normal; }
+ .team-points-table th, .team-points-table td { padding: var(--space-2) var(--space-1); font-size: 11px; vertical-align: top; overflow-wrap: anywhere; }
+ .team-points-table th:first-child { width: 36%; }
+ .team-points-table .numeric { text-align: right; font-variant-numeric: tabular-nums; }
+ .team-points-table .mobile-cell-label, .team-points-table .team-qualification-column, .team-desktop-label { display: none; }
+ .team-mobile-label { display: inline; }
+ .team-mobile-qualification { display: block; font-size: 11px; color: var(--text); }
+ .team-mobile-qualification summary { cursor: pointer; min-height: 44px; padding: var(--space-2) 0; }
+ .team-points-table .captain-tag { font-size: 10px; margin-left: 0; }
+ .team-points-table .team-mobile-qualification>span { display: block; }
+}
+
+/* One compact management row; details stay with their duty on every route. */
+.managed-duty-day { margin-top:var(--space-5); }
+.managed-duty-day h3 {font-size:13px;margin-bottom:var(--space-2);}
+.managed-duty-row {display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,1fr);gap:var(--space-4);padding:var(--space-3) 0;border-top:1px solid var(--border);align-items:start;}
+.managed-duty-description {display:flex;flex-direction:column;align-items:flex-start;gap:var(--space-1);min-width:0;overflow-wrap:anywhere;}
+.managed-duty-description small {color:var(--text-muted);}
+.managed-duty {min-width:0;white-space:normal;}
+.managed-duty-status {display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:center;}
+.open-duty-count {color:var(--warning);font-weight:600;}
+.managed-duty-members {margin:var(--space-1) 0;overflow-wrap:anywhere;}
+.duty-management-detail>summary,.duty-edit>summary,.service-create>summary {cursor:pointer;min-height:32px;padding:var(--space-2) 0;color:var(--accent-text);}
+.duty-management-detail[open]>.stack-form {margin-top:var(--space-2);padding:var(--space-3);border:1px solid var(--border);background:var(--surface-subtle);}
+.duty-management-detail input,.duty-management-detail select {width:100%;min-width:0;}
+.enrollment-correction {border-top:1px solid var(--border);padding-top:var(--space-2);}
+.duty-list-filters {margin-bottom:var(--space-3);}
+@media(max-width:768px) {
+ .managed-duty-row {grid-template-columns:minmax(0,1fr);gap:var(--space-2);}
+ .duty-management-detail>summary,.duty-edit>summary,.service-create>summary {min-height:44px;}
+ .duty-list-filters>label {flex:1 1 140px;min-width:0;}
+ .managed-duty-row .team-assignment-form {width:100%;}
+}

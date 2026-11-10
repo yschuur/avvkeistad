@@ -20,7 +20,9 @@ const id = z.uuid();
 const number = (v: FormDataEntryValue | null) => Number(v);
 const optionalNumber = (v: FormDataEntryValue | null) => v === '' || v === null ? null : Number(v);
 const text = (f: FormData, k: string) => String(f.get(k) ?? '').trim();
-const dutyReturnPath=(f:FormData)=>{const path=text(f,'return_to');return ['/beheer/planning','/mijn-diensten','/team'].includes(path)?path:'/diensten';};
+const managementDutyPaths=['/beheer/planning','/beheer/wedstrijden','/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten'];
+const managementDutyPath=(f:FormData)=>managementDutyPaths.includes(text(f,'return_to'))?text(f,'return_to'):'/beheer/planning';
+const dutyReturnPath=(f:FormData)=>{const path=text(f,'return_to');return [...managementDutyPaths,'/mijn-diensten','/team'].includes(path)?path:'/diensten';};
 const manager = async () => {
   const db = await supabase();
   const { data: { user } } = await db.auth.getUser();
@@ -165,7 +167,7 @@ export async function invite(f: FormData) {
   });
 }
 export async function cancelDuty(f: FormData) {
-  await run('/beheer/planning', async () => {const {db}=await manager();const {error}=await db.rpc('cancel_duty',{p_duty:id.parse(f.get('duty_id'))});if(error) throw new Error(error.message);});
+  await run(managementDutyPath(f), async () => {const {db}=await manager();const {error}=await db.rpc('cancel_duty',{p_duty:id.parse(f.get('duty_id'))});if(error) throw new Error(error.message);});
 }
 export async function saveFunction(f: FormData) {
   await run('/beheer/functies', async () => {const {db}=await manager();const {error}=await db.rpc('save_function',{p_season:id.parse(f.get('season_id')),p_title:z.string().min(1).parse(text(f,'title')),p_points:z.number().min(0).parse(number(f.get('points')))});if(error) throw new Error(error.message);});
@@ -240,7 +242,7 @@ export async function testMatchNotifications() {
 }
 
 export async function setDutyQualification(f:FormData) {
- await run('/beheer/planning',async()=>{
+ await run(managementDutyPath(f),async()=>{
   const {db}=await manager();const {error}=await db.rpc('set_duty_qualification',{p_duty:id.parse(f.get('duty_id')),p_qualification:refereeLevelSchema.parse(text(f,'qualification'))});
   if(error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 005_referee_qualifications.sql uit in Supabase.':error.message);
  });
@@ -254,7 +256,7 @@ export async function updateTeamCompetition(f:FormData) {
 }
 
 export async function assignDutyTeam(f:FormData) {
- const target=text(f,'return_to')==='/beheer/wedstrijden'?'/beheer/wedstrijden':'/beheer/planning';
+ const target=managementDutyPath(f);
  await run(target,async()=>{
   const {db}=await manager();const {error}=await db.rpc('assign_duty_team',{p_duty:id.parse(f.get('duty_id')),p_team:text(f,'team_id')?id.parse(f.get('team_id')):null});
   if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om teams toe te wijzen.':error.message);
@@ -306,3 +308,13 @@ async function saveFunctionItem(f:FormData,isGroup:boolean) {
 }
 export async function saveSeasonFunction(f:FormData) {await saveFunctionItem(f,false);}
 export async function saveFunctionGroup(f:FormData) {await saveFunctionItem(f,true);}
+
+export async function updateDuty(f:FormData) {
+ await run(managementDutyPath(f),async()=>{
+  const {db}=await manager();
+  const start=fromZonedTime(text(f,'start'),'Europe/Amsterdam'),end=fromZonedTime(text(f,'end'),'Europe/Amsterdam');
+  if(!Number.isFinite(start.getTime())||!Number.isFinite(end.getTime())||end<=start) throw new Error('Controleer de begin- en eindtijd.');
+  const {error}=await db.rpc('update_managed_duty',{p_duty:id.parse(f.get('duty_id')),p_title:z.string().min(1).max(200).parse(text(f,'title')),p_location:z.string().min(1).max(500).parse(text(f,'location')),p_start:start.toISOString(),p_end:end.toISOString(),p_capacity:z.number().int().min(1).max(100).parse(number(f.get('capacity')))});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 015_duty_management.sql uit om diensten te wijzigen.':error.message);
+ });
+}

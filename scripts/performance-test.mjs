@@ -108,6 +108,11 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/update_member_qualification') {
   const input=JSON.parse(body);refereeQualifications.set(input.p_member,input.p_qualification);return res.end('null');
  }
+ if(url.pathname==='/rest/v1/rpc/captain_team_duty_count') {
+  const actor=JSON.parse(Buffer.from((req.headers.authorization??'').split('.')[1]??'','base64url').toString()).sub;
+  return res.end(JSON.stringify(actor===memberA&&captainA?[testDuty,...extraDuties].filter(d=>d.assigned_team_id===(teamAssignments.get(memberA)??teamId)&&!d.cancelled&&!d.signup_closed&&new Date(d.starts_at)>new Date()&&extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length<d.capacity).length:0));
+ }
+ if(url.pathname==='/rest/v1/rpc/update_managed_duty') {const input=JSON.parse(body);const d=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);Object.assign(d,{title:input.p_title,location:input.p_location,starts_at:input.p_start,ends_at:input.p_end,capacity:input.p_capacity});return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/set_duty_qualification') {
   const input=JSON.parse(body);testDuty.required_qualification=input.p_qualification;testDuty.required_level=refereeCodes.indexOf(input.p_qualification)+1;return res.end('null');
  }
@@ -205,7 +210,7 @@ const mock=createServer(async(req,res)=>{
    const id=url.searchParams.get('member_id')?.replace('eq.','');
    result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamAssignments.get(member_id) ?? teamId,captain:member_id===memberA&&captainA,norm_override:null}));
  }
- if(url.pathname==='/rest/v1/duties') result=[testDuty,...extraDuties];
+ if(url.pathname==='/rest/v1/duties') result=[testMatch.referee_duties.length?{...testDuty,...testMatch.referee_duties[0],match_id:testMatch.id,starts_at:testMatch.starts_at,ends_at:new Date(new Date(testMatch.starts_at).getTime()+5400000).toISOString()}:testDuty,...extraDuties];
  if(url.pathname==='/rest/v1/enrollments') {
   const member=url.searchParams.get('member_id')?.replace('eq.','');
   const ownBase=!hideTestEnrollment?[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}]:[];
@@ -317,6 +322,7 @@ try {
  testTeams=[{id:teamId,name:'Eigen testteam',age_class:'senior',competition_level:null},{id:otherTeam,name:'Ander testteam',age_class:'senior',competition_level:null}];
  extraDuties=[{...testDuty,id:reservedId,title:'Eigen teamfluitdienst',assigned_team_id:teamId,kind:'referee',required_qualification:'R1',required_level:5,capacity:1,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()},{...testDuty,id:foreignId,title:'Dienst van ander team',assigned_team_id:otherTeam}];extraEnrollments=[];
  await page.goto(base+'/team');await page.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ await page.locator('nav[aria-label="Hoofdnavigatie"] a[href="/team"] .team-duty-count').getByText('1',{exact:true}).waitFor();
  assert.equal(await page.getByRole('heading',{name:'Ander testteam',exact:true}).count(),0);
  assert.equal(await page.getByRole('heading',{name:'Dienst van ander team',exact:true}).count(),0);
  assert.equal(await page.getByRole('region',{name:'Teampunten'}).getByText('Alex Test',{exact:true}).count(),0);
@@ -354,6 +360,11 @@ try {
  await captainTouch.locator('.team-duty-blocked').getByText('Niet de juiste scheidsrechterslicentie: Overige klassen (senioren en jeugd) (V6); minimaal t/m 3e Divisie (R1) vereist.',{exact:true}).waitFor();
  assert.ok((await touchPicker.boundingBox()).height>=44);
  assert.equal(await captainTouch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await captainTouch.locator('.mobile-nav-link[href="/team"] .team-duty-count').getByText('1',{exact:true}).waitFor();
+ const mobilePoints=captainTouch.getByRole('region',{name:'Teampunten'});
+ assert.equal(await mobilePoints.getByRole('columnheader').count(),5);
+ await mobilePoints.locator('.team-mobile-qualification summary').first().tap();
+ await mobilePoints.locator('.team-mobile-qualification>span').first().waitFor();
  await touchPicker.selectOption(memberB);
  assert.equal(await touchPicker.inputValue(),memberB);
  await captainTouchContext.close();
@@ -361,7 +372,7 @@ try {
  await page.waitForURL(url=>url.pathname==='/team'&&url.searchParams.has('success'));
  await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).at(-1).body.p_member,memberB);
- await page.getByText('Geen openstaande teamdiensten.',{exact:true}).waitFor();
+ await page.getByText('Geen openstaande teamdiensten.',{exact:true}).waitFor();assert.equal(await page.locator('.team-duty-count').count(),0);
  captainA=false;teamAssignments.clear();testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];extraDuties=[];extraEnrollments=[];
  await page.goto(base+'/');await page.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
  console.log('Ledenomgeving geslaagd: vier menuonderdelen, eigen profiel en historie, geen andermans diensten, alleen eigen aanvoerdersteam en bevoegde teamleden toewijzen. Alleen lokale testgegevens.');
@@ -520,14 +531,46 @@ try {
  await adminPage.getByText('1 gevonden',{exact:true}).waitFor();
  assert.equal(await adminPage.getByRole('region',{name:'Ledenoverzicht'}).getByRole('row').count(),2);
  for(const [route,kind,title] of [['bardiensten','bar','Bardiensten'],['evenementen','event','Evenementen'],['overige-diensten','other','Overige diensten']]) {
-  await adminPage.goto(base+'/beheer/'+route);await adminPage.getByRole('heading',{name:title,exact:true}).waitFor();
-  await adminPage.getByLabel('Titel',{exact:true}).fill('Eigen '+kind+' testdienst');await adminPage.getByLabel('Locatie',{exact:true}).fill('Testhal');
-  await adminPage.getByLabel('Begint op',{exact:true}).fill('2027-06-01T18:00');await adminPage.getByLabel('Eindigt op',{exact:true}).fill('2027-06-01T20:00');
+  await adminPage.goto(base+'/beheer/'+route);await adminPage.getByRole('heading',{name:title,exact:true}).waitFor();await adminPage.getByRole('link',{name:'Nieuwe dienst',exact:true}).click();
+  const create=adminPage.locator('#dienst-aanmaken');
+  await create.getByLabel('Titel',{exact:true}).fill('Eigen '+kind+' testdienst');await create.getByLabel('Locatie',{exact:true}).fill('Testhal');
+  await create.getByLabel('Begint op',{exact:true}).fill('2027-06-01T18:00');await create.getByLabel('Eindigt op',{exact:true}).fill('2027-06-01T20:00');
   await adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).click();await adminPage.waitForURL(url=>url.pathname==='/beheer/'+route&&url.searchParams.has('success'));
   assert.equal(authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body.p_kind,kind);
   assert.equal(authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body.p_title,'Eigen '+kind+' testdienst');
  }
  console.log('Beheeromgeving en dienstenmenu geslaagd: uitklappen, actieve groep/herladen, drie soortgebonden aanmaakpagina’s, eigen titel, juiste RPC-soort en terugkeer.');
+
+ if(process.env.SCREENSHOT_DIR) await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ {const page=adminPage,savedDuty={...testDuty},savedDuties=extraDuties,savedEnrollments=extraEnrollments,writeStart=authWrites.length;
+ for(const [route,kind] of [['bardiensten','bar'],['evenementen','event'],['overige-diensten','other']]) {
+  Object.assign(testDuty,{kind,title:'Dienst '+kind,cancelled:false,assigned_team_id:null,capacity:2});
+  await page.goto(base+'/beheer/'+route);await page.getByRole('heading',{name:'Diensten beheren',exact:true}).waitFor();
+  await page.getByText('1 persoon nodig',{exact:true}).waitFor();await page.locator('.managed-duty-members').getByText('Anna Test',{exact:true}).waitFor();
+  assert.equal(await page.getByRole('link',{name:'Beheren in Planning'}).count(),0);
+  await page.locator('.duty-management-detail>summary').click();
+  await page.locator('.duty-edit>summary').click();
+  const edit=page.getByRole('button',{name:'Wijzigingen opslaan',exact:true}).locator('xpath=ancestor::form');
+  await edit.getByLabel('Titel',{exact:true}).fill('Aangepaste '+kind);await edit.getByLabel('Aantal deelnemers',{exact:true}).fill('4');await edit.getByRole('button',{name:'Wijzigingen opslaan',exact:true}).click();await page.waitForURL(u=>u.pathname==='/beheer/'+route&&u.searchParams.has('success'));
+  await page.locator('.managed-duty-description').getByText('Aangepaste '+kind,{exact:true}).waitFor();await page.getByText('3 personen nodig',{exact:true}).waitFor();
+  await page.locator('.duty-management-detail>summary').click();
+  const team=page.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');await team.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'),team.getByRole('button',{name:'Team opslaan',exact:true}).click()]);await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+  await page.reload();await page.locator('.duty-management-detail>summary').click();
+
+  const assign=page.getByRole('button',{name:'Lid toewijzen',exact:true}).locator('xpath=ancestor::form');await assign.getByLabel('Lid toewijzen',{exact:true}).selectOption(memberB);await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'),assign.getByRole('button',{name:'Lid toewijzen',exact:true}).click()]);await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();assert.equal(authWrites.filter(w=>w.path.endsWith('/enroll')).at(-1).body.p_member,memberB);
+  await page.reload();await page.locator('.duty-management-detail>summary').click();await page.getByRole('button',{name:'Dienst verwijderen',exact:true}).click();await page.getByRole('button',{name:'Bevestigen',exact:true}).click();await page.getByText('Geen diensten in deze selectie.',{exact:true}).waitFor();
+ }
+ Object.assign(testDuty,{kind:'bar',title:'Bardienst Amerena',cancelled:false,capacity:3});
+ extraDuties=[{...testDuty,id:'50000000-0000-4000-8000-000000000012',title:'Volle bardienst',capacity:1}];extraEnrollments=[{id:'85000000-0000-4000-8000-000000000012',duty_id:extraDuties[0].id,member_id:memberB,revoked:false,offered:false}];
+ for(const width of [320,390,768,1440]) {
+  await page.setViewportSize({width,height:950});await page.goto(base+'/beheer/planning');await page.getByRole('heading',{name:'Diensten beheren',exact:true}).waitFor();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  if(process.env.SCREENSHOT_DIR) await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/planning-${width}.png`,fullPage:true});
+  await page.goto(base+'/beheer/bardiensten');await page.locator('.duty-management-detail>summary').first().click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR) await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/bar-${width}.png`,fullPage:true});
+ }
+ await page.goto(base+'/beheer/planning?status=open');assert.equal(await page.getByText('Volle bardienst',{exact:true}).count(),0);await page.getByText('Bardienst Amerena',{exact:true}).waitFor();
+ console.log('Focused management: create routes, edit, assignment, deletion, open filter, desktop/mobile overflow passed.');
+
+ Object.assign(testDuty,savedDuty);extraDuties=savedDuties;extraEnrollments=savedEnrollments;authWrites.splice(writeStart);await adminPage.setViewportSize({width:1280,height:950});}
  // Managers open an active-season team roster; other teams stay outside it.
  const rosterOtherTeam='30000000-0000-4000-8000-000000000088',rosterEmptyTeam='30000000-0000-4000-8000-000000000089',rosterTeamsBefore=[...testTeams];
  testTeams=[...testTeams,{id:rosterOtherTeam,name:'Ander team',age_class:'senior',competition_level:null},{id:rosterEmptyTeam,name:'Leeg team',age_class:'senior',competition_level:null}];teamAssignments.set(admin,rosterOtherTeam);captainA=true;
@@ -735,20 +778,22 @@ try {
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  await adminPage.reload();assert.equal(await adminPage.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).inputValue(),'3.25');
  assert.equal(testDuty.points,2);
- await adminPage.goto(base+'/beheer/planning');
+ await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
  const reservation=adminPage.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');
  await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- await adminPage.reload();assert.equal(await reservation.getByLabel('Toewijzen aan team',{exact:true}).inputValue(),teamId);
+ await adminPage.reload();await adminPage.locator('.duty-management-detail>summary').first().click();assert.equal(await reservation.getByLabel('Toewijzen aan team',{exact:true}).inputValue(),teamId);
  if(process.env.SCREENSHOT_DIR) {
   for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamreservering-planning-${width}.png`,fullPage:true});}
   await adminPage.setViewportSize({width:1280,height:950});
  }
+ if(!await reservation.getByLabel('Toewijzen aan team',{exact:true}).isVisible()) await adminPage.locator('.duty-management-detail>summary').first().click();
  await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(testDuty.assigned_team_id,null);
+ await adminPage.getByRole('link',{name:'Nieuwe dienst',exact:true}).click();
  const generalDuty=adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).locator('xpath=ancestor::form');
  const futureDate=new Date(Date.now()+86400000).toISOString().slice(0,10);
  await generalDuty.getByLabel('Titel',{exact:true}).fill('Lokale testfluitdienst');
@@ -796,7 +841,7 @@ try {
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/wedstrijden'),matchDuty.getByRole('button',{name:'Fluitdienst aanmaken',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/create_team_match_duty')).at(-1).body,{p_match:testMatch.id,p_team:teamId});
- await adminPage.getByRole('link',{name:'Fluitdienst bekijken',exact:true}).waitFor();
+ await adminPage.locator('.duty-management-detail>summary').click();
  assert.equal(testMatch.referee_duties[0].points,3.25);
  if(process.env.SCREENSHOT_DIR) {
   for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamreservering-wedstrijd-${width}.png`,fullPage:true});}
@@ -854,7 +899,7 @@ try {
  await page.locator('.duty-day summary').first().click();
  await page.getByText('Je hebt niet het vereiste scheidsrechtersniveau.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
- await adminPage.goto(base+'/beheer/planning');
+ await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
  await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
@@ -865,13 +910,13 @@ try {
  hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
  console.log('Scheidsrechtersniveaus geslaagd: acht codes in opgegeven volgorde, R2.2 opslaan/herladen, bestaand dienstniveau aanpassen en blokkeren van te laag niveau. Alleen lokale testgegevens.');
  // A destructive action requires confirmation; dismissing does not submit.
- await adminPage.goto(base+'/beheer/planning');
- await adminPage.getByRole('button',{name:'Dienst annuleren',exact:true}).click();
+ await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
+ await adminPage.getByRole('button',{name:'Dienst verwijderen',exact:true}).click();
  await adminPage.getByRole('dialog',{name:'Actie bevestigen'}).waitFor();
  await adminPage.getByRole('button',{name:'Annuleren',exact:true}).click();
  assert.equal(await adminPage.getByRole('dialog').count(),0);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/cancel_duty')).length,0);
- await adminPage.getByRole('button',{name:'Dienst annuleren',exact:true}).click();
+ await adminPage.getByRole('button',{name:'Dienst verwijderen',exact:true}).click();
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),adminPage.getByRole('button',{name:'Bevestigen',exact:true}).click()]);
  assert.equal(authWrites.filter(r=>r.path.endsWith('/cancel_duty')).length,1);
  assert.equal(testDuty.cancelled,true);
@@ -1129,7 +1174,7 @@ try {
  // Team assignment and default-based match creation also work through touch.
  const previousMatch={...testMatch},wasCancelled=testDuty.cancelled;
  testDuty.cancelled=false;
- await manageTouch.goto(base+'/beheer/planning');
+ await manageTouch.goto(base+'/beheer/planning');await manageTouch.locator('.duty-management-detail>summary').first().tap();
  const touchTeam=manageTouch.getByRole('button',{name:'Team opslaan',exact:true}).first().locator('xpath=ancestor::form');
  await touchTeam.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
  await Promise.all([manageTouch.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),touchTeam.getByRole('button',{name:'Team opslaan',exact:true}).tap()]);
