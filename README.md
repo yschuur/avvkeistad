@@ -325,3 +325,7 @@ Zonder 009 blijven bestaande ledeninstellingen en punten leesbaar; de nieuwe toe
 ## Bijgewerkte divisiegrenzen (010)
 
 Voer `supabase/migrations/010_division_referee_levels.sql` uit na 006 in de database van de app. Superdivisie, Topdivisie, Eerste en Tweede divisie vereisen N2 of N1; Derde divisie vereist R1 of hoger en Promotieklasse R2 of hoger. Vanaf promotieklasse blijven clubfluitdiensten uitgesloten. Bestaande inschrijvingen en punten blijven behouden. Aanvoerders zien competitietekst bij de licentie.
+
+## Diensten per datum en deelnemers (011)
+
+Voer `supabase/migrations/011_duty_participants.sql` uit in de database van de app, na 001. Open diensten toont alle komende niet-geannuleerde diensten per uitklapbare datum, met combineerbare team- en typefilters. Volle diensten en de ingeschreven leden blijven zichtbaar. De beperkte RPC geeft uitsluitend voor komende diensten van het actieve seizoen de voor- en achternamen van actieve inschrijvingen terug aan ingelogde leden. Profiel-, e-mail- en inschrijfhistorie blijven onder bestaande RLS. Inschrijfbevoegdheden veranderen niet.

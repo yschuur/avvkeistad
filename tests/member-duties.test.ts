@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions } from '../lib/member-duties';
+import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions,listedMemberDuties,groupDutiesByDay } from '../lib/member-duties';
 import { REFEREE_LEVELS,refereeDescription } from '../lib/referee-levels';
 import type { AppData } from '../lib/data';
 import type { Duty,Profile,Enrollment } from '../lib/domain';
@@ -51,4 +51,12 @@ test('beschikbare licenties blijven onderscheiden van inschrijvingen en roosterc
  d.enrollments=[enrollment('revoked','overlap','me',true),enrollment('cancelled','cancelled','teammate')];
  assert.deepEqual(teamDutyOptions(d,ref,'own').map(o=>o.reason),[null,null]);
  assert.equal(teamDutyOptions(d,duty('bar'),'own').length,2,'Bar duties do not require a referee licence');
+});
+
+test('ledenlijst bevat ook volle, eigen, onbevoegde en andere teamdiensten, op Nederlandse datum gesorteerd',()=>{
+ const d=data();d.duties=[duty('late',{starts_at:'2027-01-10T23:10:00Z'}),duty('full'),duty('other',{assigned_team_id:'other-team'}),duty('ref',{kind:'referee',required_qualification:'N1'}),duty('closed',{signup_closed:true}),duty('cancelled',{cancelled:true}),duty('past',{starts_at:'2026-01-01T00:00:00Z'})];
+ d.availability=[{duty_id:'full',occupied:1,offered_ids:[]}];d.enrollments=[enrollment('mine','full')];
+ const listed=listedMemberDuties(d,now);
+ assert.deepEqual(listed.map(d=>d.id),['closed','full','other','ref','late']);
+ assert.deepEqual(groupDutiesByDay(listed).map(([day,rows])=>[day,rows.length]),[['2027-01-10',4],['2027-01-11',1]]);
 });

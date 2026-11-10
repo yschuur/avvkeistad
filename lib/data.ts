@@ -62,6 +62,16 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
 });
 
 export type AppData = Awaited<ReturnType<typeof getData>>;
+export type DutyParticipant={duty_id:string;first_name:string;last_name:string};
+export async function getDutyParticipants():Promise<DutyParticipant[]|null> {
+ const db=await supabase();
+ try {
+  return (await collectPages<DutyParticipant>(async(from,to)=>{
+   const r=await db.rpc('duty_participants',{}, {count:'exact'}).order('duty_id').order('first_name').order('last_name').range(from,to);
+   return {data:r.data as DutyParticipant[]|null,count:r.count,error:r.error};
+  })).data;
+ } catch {return null;}
+}
 export function memberProgress(data: AppData, memberId: string) {
   const membership = data.memberships.find(m => m.member_id === memberId);
   const team = data.teams.find(t => t.id === membership?.team_id);

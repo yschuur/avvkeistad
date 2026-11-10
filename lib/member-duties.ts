@@ -16,6 +16,17 @@ export function openMemberDuties(data:AppData,now=new Date()) {
   return (availability?.occupied ?? 0)<d.capacity||Boolean(availability?.offered_ids.length);
  });
 }
+export function listedMemberDuties(data:AppData,now=new Date()) {
+ return data.duties.filter(d=>!d.cancelled&&new Date(d.starts_at)>now).sort((a,b)=>new Date(a.starts_at).getTime()-new Date(b.starts_at).getTime()||a.id.localeCompare(b.id));
+}
+export function groupDutiesByDay(duties:Duty[]) {
+ const days=new Map<string,Duty[]>();
+ for(const duty of duties) {
+  const day=new Date(duty.starts_at).toLocaleDateString('sv-SE',{timeZone:'Europe/Amsterdam'});
+  days.set(day,[...(days.get(day) ?? []),duty]);
+ }
+ return [...days].sort(([a],[b])=>a.localeCompare(b));
+}
 export function ownDutyEntries(data:AppData) {
  const entries=new Map<string,{duty:Duty;enrollment:Enrollment}>();
  for(const e of data.enrollments.filter(e=>e.member_id===data.profile.id)) {

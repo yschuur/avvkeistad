@@ -207,6 +207,7 @@ const mock=createServer(async(req,res)=>{
   const ownBase=!hideTestEnrollment?[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}]:[];
   result=[...ownBase,...extraEnrollments].filter(e=>!member||e.member_id===member);
  }
+ if(url.pathname==='/rest/v1/rpc/duty_participants') result=[...(!hideTestEnrollment?[{duty_id:testDuty.id,member_id:memberA}]:[]),...extraEnrollments].filter(e=>!e.revoked).map(e=>({duty_id:e.duty_id,first_name:profile(e.member_id).first_name,last_name:profile(e.member_id).last_name}));
  if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))];
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
@@ -427,8 +428,29 @@ try {
  testDuty.signup_closed=true;
  await page.goto(base+'/diensten?view=mine');
  await page.getByRole('button',{name:'Afmelden',exact:true}).waitFor();
- assert.doesNotMatch((await load('/diensten',cookieB)).html,/Testdienst/);
+ assert.match((await load('/diensten',cookieB)).html,/Testdienst/);
  testDuty.signup_closed=false;
+ // Dates start collapsed; full duties and participant names stay visible after opening.
+ const fullListDuty='50000000-0000-4000-8000-000000000091';
+ extraDuties=[{...testDuty,id:fullListDuty,title:'Volle teamdienst',assigned_team_id:teamId,capacity:1,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()}];
+ extraEnrollments=[{id:'85000000-0000-4000-8000-000000000091',duty_id:fullListDuty,member_id:memberB,revoked:false,offered:false,created_at:new Date().toISOString()}];
+ await page.goto(base+'/diensten');await page.getByRole('heading',{name:'Open diensten',exact:true}).waitFor();
+ assert.equal(await page.locator('.duty-day').count(),2);
+ assert.equal(await page.locator('.duty-day[open]').count(),0);
+ await page.locator('.duty-day summary').last().focus();await page.keyboard.press('Enter');
+ const fullRow=page.getByRole('article').filter({hasText:'Volle teamdienst'});
+ await fullRow.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
+ await fullRow.getByText('Vol',{exact:true}).waitFor();
+ assert.equal(await fullRow.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
+ await page.getByLabel('Team',{exact:true}).selectOption(teamId);await page.getByRole('button',{name:'Filteren',exact:true}).click();
+ await page.waitForURL(url=>url.pathname==='/diensten'&&url.searchParams.get('team')===teamId);
+ assert.equal(await page.locator('.duty-day').count(),1);
+ await page.locator('.duty-day summary').click();await page.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
+ if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/diensten-per-dag-${width}.png`,fullPage:true});}
+ await page.getByRole('link',{name:'Filters wissen',exact:true}).click();await page.waitForURL(base+'/diensten');
+ assert.equal(await page.locator('.duty-day').count(),2);
+ await page.setViewportSize({width:1280,height:950});extraDuties=[];extraEnrollments=[];
+ console.log('Dienstenlijst geslaagd: gesloten datums, toetsenbord openen, volle teamdienst met namen, geblokkeerde inschrijving, teamfilter en wissen, desktop/mobiel.');
  // Exercise the original admin flow, rejected credentials and both email-link formats.
  const adminPage=await browser.newPage();adminPage.setDefaultTimeout(10000);await adminPage.goto(base+'/login');
  await adminPage.getByLabel('E-mailadres').fill('admin@example.test');
@@ -759,14 +781,15 @@ try {
  // The member view compares the new codes rather than old numbers.
  hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
  await page.goto(base+'/diensten');
- await page.getByText('Er zijn nu geen passende open diensten.',{exact:true}).waitFor();
- assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).count(),0);
+ await page.locator('.duty-day summary').first().click();
+ await page.getByText('Scheidsrechtersniveau N3 vereist',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
  await adminPage.goto(base+'/beheer/planning');
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
  await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  assert.equal(testDuty.required_qualification,'R2.2');
- await page.goto(base+'/diensten');assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),false);
+ await page.goto(base+'/diensten');await page.locator('.duty-day summary').first().click();assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),false);
  if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/open-dienst-${width}.png`,fullPage:true});}
  await page.setViewportSize({width:1280,height:950});
  hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
@@ -985,7 +1008,7 @@ try {
  extraDuties=[{...testDuty,id:mobileDutyId,title:'Mobiele inschrijftest',kind:'bar',required_level:0,required_qualification:null,cancelled:false,signup_closed:false,starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()}];extraEnrollments=[];
  await touch.goto(base+'/');await touch.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
  const quick=touch.getByRole('navigation',{name:'Mobiele hoofdnavigatie'});assert.equal(await quick.getByRole('link').count(),4);
- await quick.getByRole('link',{name:'Diensten',exact:true}).tap();await touch.waitForURL(base+'/diensten');
+ await quick.getByRole('link',{name:'Diensten',exact:true}).tap();await touch.waitForURL(base+'/diensten');await touch.locator('.duty-day summary').first().tap();
  await touch.getByRole('article').filter({hasText:'Mobiele inschrijftest'}).getByRole('button',{name:'Inschrijven',exact:true}).tap();
  await touch.waitForURL(url=>url.pathname==='/mijn-diensten'&&url.searchParams.has('success'));await touch.getByRole('heading',{name:'Mobiele inschrijftest',exact:true}).waitFor();
  await quick.getByRole('link',{name:'Profiel',exact:true}).tap();await touch.getByRole('heading',{name:'Mijn profiel',exact:true}).waitFor();
