@@ -286,3 +286,21 @@ Voer `supabase/migrations/008_team_duties_and_referee_defaults.sql` uit in de **
 Een team moet bij hetzelfde seizoen horen. Wisselen naar een team met ingeschreven deelnemers buiten dat team wordt geweigerd; bestaande inschrijvingen worden nooit stilzwijgend ingetrokken. Trek die inschrijvingen zo nodig eerst bewust in bij Inschrijvingen corrigeren. Diploma, capaciteit, overlappende diensten, inschrijfsluiting en aanvoerdersrechten blijven beschermd door de database. Het verantwoordelijke vrijwilligersteam verandert het vereiste diploma van een wedstrijd niet.
 
 `save_duty_settings` en `assign_duty_team` worden vastgelegd in `audit_log`. De nieuwe RPC’s controleren beheerrechten en accepteren bij wedstrijdfluitdiensten uitsluitend wedstrijd- en eventueel team-ID. De eerdere RPC’s blijven bestaan voor compatibiliteit; de app gebruikt de nieuwe standaardpuntenfuncties. De database- en browsertests controleren opslag/herladen, gegevensbehoud, teamwissels, onbevoegde verzoeken en mobiele bediening met lokale testgegevens.
+
+## Handmatig aangevraagde testleden
+
+`scripts/seed-test-members.sql` is een afzonderlijk testdatabestand, geen migratie en geen onderdeel van de productie-app of deployment. Voer het volledige bestand handmatig uit in de Supabase SQL Editor van de bedoelde database. Er moet een actief seizoen met teams zijn en migratie 005 moet zijn uitgevoerd.
+
+Het script vult ieder team van het actieve seizoen aan tot 8–12 leden. Teams die al 8–12 leden hebben worden nooit verkleind. De namen zijn verzonnen, de e-mailadressen eindigen op `@example.test` en de unieke fictieve Nevobo-codes beginnen met `TEST`. Nieuwe accounts krijgen uitsluitend de rol `member`, een willekeurig verdeeld niveau uit V6/V4/R2.2/R2/R1/N3/N2/N1 en een bijbehorende interne rang. Ieder team krijgt precies één aanvoerder; een reeds aanwezige aanvoerder blijft behouden. Bestaande leden, wachtwoorden, inschrijvingen, punten en teamreserveringen worden niet overschreven. Meer dan 12 bestaande leden of meerdere bestaande aanvoerders veroorzaken een fout zonder gedeeltelijke import.
+
+De Supabase Auth-gebruikers én hun e-mailidentities worden aangemaakt; `email_confirmed_at` en `email_verified` worden direct ingesteld. Er worden geen uitnodigings- of bevestigingsmails verstuurd. De bestaande profieltrigger maakt het app-profiel. Na afloop verschijnt een overzicht per team met aantallen en aanvoerder. Opnieuw uitvoeren voegt bij ongewijzigde roosters niets toe. De actie wordt zonder wachtwoord vastgelegd als `seed_test_members` in `audit_log`. Via `auth.users.raw_user_meta_data.seed_source = 'keistad-test-members-v1'` blijven de gegenereerde accounts herkenbaar.
+
+### Ook inloggen als een testlid
+
+Zonder extra instelling hebben de nieuwe accounts geen wachtwoord; ze zijn wel bevestigd en bruikbaar voor de ledenadministratie en planning. Voor inloggen met testaccounts kies je zelf een testwachtwoord van minimaal 12 tekens. Zet onderstaande opdracht **bovenaan hetzelfde SQL Editor-venster**, gevolgd door het volledige testdatabestand, en voer alles samen uit. Vervang de drie puntjes door jouw eigen testwachtwoord; de voorbeeldwaarde wordt geweigerd. Deel het wachtwoord niet in de chat en sla het niet op in de repository.
+
+```sql
+select set_config('avv.test_member_password', '...', false);
+```
+
+Deze optionele instelling gebruikt de bestaande Supabase-extensie `pgcrypto` om alleen voor **nieuwe** testaccounts een wachtwoordhash te maken. De sessie-instelling wordt na een succesvolle import gewist; herhalen reset geen bestaande wachtwoorden. Kies deze optie dus bij de eerste import als je met de dummyaccounts wilt inloggen. Het overzicht na afloop toont de aanvoerdersadressen; de overige testadressen staan onder Beheer → Leden. De tests controleren SQL/identities, e-mailbevestiging, UUID-formaat, wachtwoordhash, alle 57 teams, rechten, veilig herhalen en rollback met uitsluitend lokale testdata. Er worden daarmee geen live gebruikers aangemaakt of live aanmeldingen bevestigd.
