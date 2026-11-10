@@ -1,6 +1,6 @@
 export type Role = 'admin' | 'manager' | 'member';
 export type Duty = {
-  id: string; title: string; kind: 'bar' | 'referee' | 'event' | 'lines';
+  id: string; title: string; kind: 'bar' | 'referee' | 'event' | 'lines' | 'other';
   starts_at: string; ends_at: string; points: number; capacity: number;
   location: string; required_level: number; assigned_team_id: string | null;
   required_qualification?:string|null;cancelled: boolean; signup_closed?:boolean;credit_blocked?:boolean;match_id?:string|null;
@@ -17,4 +17,4 @@ export function overlaps(a: Pick<Duty, 'starts_at' | 'ends_at'>, b: Pick<Duty, '
 export function progress(norm: number, earned: number, planned: number) {
   return { norm, earned, planned, toPlan: Math.max(0, norm - earned - planned), toEarn: Math.max(0, norm - earned) };
 }
-export const kindLabels = { bar: 'Bardienst', referee: 'Fluitdienst', event: 'Evenement', lines: 'Vlaggen' };
+export const kindLabels = { bar: 'Bardienst', referee: 'Fluitdienst', event: 'Evenement', lines: 'Vlaggen', other: 'Overige dienst' };

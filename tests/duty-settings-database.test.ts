@@ -81,5 +81,9 @@ test('dienstinstellingen en teamreserveringen: rechten, vaste punten, veilige te
   assert.deepEqual((await db.query('select id,points,assigned_team_id,starts_at,ends_at from duties order by id')).rows,snapshot);
   assert.equal((await row<{referee_points:string}>('select referee_points from duty_settings')).referee_points,'4.00');
   assert.ok((await row<{n:number}>("select count(*)::int as n from audit_log where action='save_duty_settings'")).n>=2);
+  await as(null);const otherMigration=await readFile(new URL('../supabase/migrations/013_other_duties.sql',import.meta.url),'utf8');await db.exec(otherMigration);await db.exec(otherMigration);
+  await as(manager);const custom=await manual('Zelfgekozen overige dienst','other');
+  assert.deepEqual(await row('select kind,title,points::text,required_qualification from duties where id=$1',[custom]),{kind:'other',title:'Zelfgekozen overige dienst',points:'2.00',required_qualification:null});
+  await as(outside);await assert.rejects(manual('Verboden dienst','other'),/beheerrechten/);
  }finally{await db.close();}
 });

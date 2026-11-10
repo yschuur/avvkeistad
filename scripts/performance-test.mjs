@@ -266,7 +266,7 @@ try {
  await expectRedirect('/beheer/instellingen/huisstijl',cookieA,'/');
  await expectRedirect('/beheer/instellingen/diensten',cookieA,'/');
  await expectRedirect('/beheer/functiegroepen',cookieA,'/');
- for(const route of ['/beheer/leden','/beheer/teams','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group=61000000-0000-4000-8000-000000000099','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
+ for(const route of ['/beheer/leden','/beheer/teams','/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group=61000000-0000-4000-8000-000000000099','/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log']) await expectRedirect(route,cookieA,'/');
  await expectRedirect('/',null,'/login');
  // A forged member ID in the cookie must not be trusted or reach the database.
  const forgedCookie=cookieA.split('; ').map(part=>{
@@ -473,8 +473,18 @@ try {
  await adminPage.getByRole('heading',{name:'Beheerdashboard',exact:true}).waitFor();
  assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
  const managementNav=adminPage.getByRole('navigation',{name:'Beheernavigatie'});
- assert.deepEqual(await managementNav.getByRole('link').allTextContents(),['Dashboard','Leden','Teams','Planning','Wedstrijden','Functies','Functiegroepen','Rapportage','Seizoenen','Instellingen']);
+ assert.equal(await managementNav.getByRole('link',{name:'Bardiensten',exact:true}).count(),0);
+ await managementNav.locator('.nav-group summary').click();
+
+ assert.deepEqual(await managementNav.getByRole('link').allTextContents(),['Dashboard','Leden','Teams','Wedstrijden','Bardiensten','Evenementen','Overige diensten','Planning','Functies','Functiegroepen','Rapportage','Seizoenen','Instellingen']);
  assert.equal(await managementNav.getByRole('link',{name:'Dashboard',exact:true}).getAttribute('aria-current'),'page');
+ await managementNav.getByRole('link',{name:'Bardiensten',exact:true}).click();await adminPage.waitForURL(base+'/beheer/bardiensten');
+ assert.equal(await managementNav.getByRole('link',{name:'Bardiensten',exact:true}).getAttribute('aria-current'),'page');
+ await adminPage.reload();assert.equal(await managementNav.locator('.nav-group').getAttribute('open'),'');
+ assert.equal(await adminPage.getByRole('combobox',{name:'Soort',exact:true}).count(),0);
+ assert.equal(await adminPage.locator('input[name=kind]').inputValue(),'bar');
+ await adminPage.goto(base+'/beheer');
+
  await adminPage.reload();assert.equal(await modeSwitch.getAttribute('aria-checked'),'true');
  await modeSwitch.click();await adminPage.waitForURL(base+'/');
  await adminPage.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
@@ -495,7 +505,15 @@ try {
  await adminPage.getByRole('button',{name:'Filteren',exact:true}).click();
  await adminPage.getByText('1 gevonden',{exact:true}).waitFor();
  assert.equal(await adminPage.getByRole('region',{name:'Ledenoverzicht'}).getByRole('row').count(),2);
- console.log('Beheeromgeving: toggle, URL/herladen/terug, tien menuonderdelen, manager/admin-grenzen, ledenzoekfunctie en lidselectie geslaagd. Alleen lokale testgegevens.');
+ for(const [route,kind,title] of [['bardiensten','bar','Bardiensten'],['evenementen','event','Evenementen'],['overige-diensten','other','Overige diensten']]) {
+  await adminPage.goto(base+'/beheer/'+route);await adminPage.getByRole('heading',{name:title,exact:true}).waitFor();
+  await adminPage.getByLabel('Titel',{exact:true}).fill('Eigen '+kind+' testdienst');await adminPage.getByLabel('Locatie',{exact:true}).fill('Testhal');
+  await adminPage.getByLabel('Begint op',{exact:true}).fill('2027-06-01T18:00');await adminPage.getByLabel('Eindigt op',{exact:true}).fill('2027-06-01T20:00');
+  await adminPage.getByRole('button',{name:'Diensten aanmaken',exact:true}).click();await adminPage.waitForURL(url=>url.pathname==='/beheer/'+route&&url.searchParams.has('success'));
+  assert.equal(authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body.p_kind,kind);
+  assert.equal(authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body.p_title,'Eigen '+kind+' testdienst');
+ }
+ console.log('Beheeromgeving en dienstenmenu geslaagd: uitklappen, actieve groep/herladen, drie soortgebonden aanmaakpagina’s, eigen titel, juiste RPC-soort en terugkeer.');
  // Season creation/editing must have separate identities and keep unsaved input
  // on a server rejection; activation is explicit and cancellable.
  await adminPage.getByRole('navigation',{name:'Beheernavigatie'}).getByRole('link',{name:'Seizoenen',exact:true}).click();
@@ -962,7 +980,7 @@ try {
  if(screenshots) await mkdir(screenshots,{recursive:true});
  for(const width of [320,390,768,1440]) {
    await adminPage.setViewportSize({width,height:950});
-   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
+   for(const path of ['/','/diensten','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/rapportage','/beheer/instellingen','/beheer/instellingen/diensten','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/teams','/beheer/seizoenen','/beheer/seizoenen?new=1','/team','/wedstrijden','/wedstrijden/log','/meldingen','/beheer/instellingen/huisstijl','/login','/wachtwoord-vergeten']) {
      await adminPage.goto(base+path,{waitUntil:'networkidle'});
      assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Horizontal overflow ${width} ${path}`);
      const mobileMenu=adminPage.getByRole('button',{name:'Navigatiemenu openen',exact:true});
@@ -977,7 +995,7 @@ try {
      }
      const largeCorners=await adminPage.locator('.panel,.button,input:not([type=checkbox]),select,.badge,.table-wrap,.duty-card,.nav-link').evaluateAll(els=>els.filter(el=>getComputedStyle(el).display!=='none'&&parseFloat(getComputedStyle(el).borderTopLeftRadius)>4).map(el=>el.className));
      assert.deepEqual(largeCorners,[],`Unexpected radius ${width} ${path}`);
-     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/functies'?'functies':path.startsWith('/beheer/functiegroepen?')?'functiegroep-leden':path==='/beheer/functiegroepen'?'functiegroepen':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
+     if(screenshots && ['/','/profiel','/mijn-diensten','/mijn-diensten?view=history','/beheer','/beheer/leden','/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten','/beheer/planning','/beheer/functies','/beheer/functiegroepen','/beheer/functiegroepen?group='+groupId,'/beheer/teams','/beheer/wedstrijden','/beheer/wedstrijden/log','/beheer/seizoenen','/beheer/instellingen/diensten','/beheer/instellingen/huisstijl'].includes(path)) await adminPage.screenshot({path:`${screenshots}/keistad-${path==='/'?'overzicht':path==='/profiel'?'profiel':path==='/mijn-diensten'?'mijn-diensten':path==='/mijn-diensten?view=history'?'mijn-historie':path==='/beheer'?'beheerdashboard':path==='/beheer/leden'?'leden':path==='/beheer/planning'?'planning':path==='/beheer/functies'?'functies':path.startsWith('/beheer/functiegroepen?')?'functiegroep-leden':path==='/beheer/functiegroepen'?'functiegroepen':path==='/beheer/teams'?'teams':path==='/beheer/seizoenen'?'seizoenen':path==='/beheer/instellingen/diensten'?'dienstinstellingen':path==='/beheer/wedstrijden'?'wedstrijden':path==='/beheer/wedstrijden/log'?'wijzigingslog':'huisstijl'}-${width}.png`,fullPage:true});
    }
  }
  // The same visible top-left trigger opens the left drawer in both workspaces.

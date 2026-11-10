@@ -579,3 +579,10 @@ input[aria-invalid=true] { border-color: var(--danger); }
  .filter-bar .member-duty-filters { display: grid; grid-template-columns: minmax(0,1fr); }
  .member-duty-filters select, .member-duty-filters .button { width: 100%; }
 }
+
+.nav-group > summary { list-style: none; cursor: pointer; }
+.nav-group > summary::-webkit-details-marker { display: none; }
+.nav-group.active > summary { color: var(--accent-text); }
+.nav-group-chevron { margin-left: auto; }
+.nav-group[open] .nav-group-chevron { transform: rotate(180deg); }
+.nav-submenu .nav-link { padding-left: var(--space-6); }

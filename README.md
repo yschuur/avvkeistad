@@ -333,3 +333,7 @@ Voer `supabase/migrations/011_duty_participants.sql` uit in de database van de a
 ## Fluitdiensten voor een periode (012)
 
 Voer `supabase/migrations/012_match_duty_period.sql` uit na 008 en 010. Beheer → Wedstrijden biedt Vanaf en Tot en met (beide inbegrepen, Europe/Amsterdam) en Fluitdiensten aanmaken. De actie gebruikt alle thuiswedstrijden van het actieve seizoen in die periode, onafhankelijk van zichtbare filters of pagina. Geplande toekomstige wedstrijden onder Promotieklasse krijgen een dienst met de ingestelde standaardpunten, 90 minuten en automatisch niveau, open voor alle teams. Bestaande diensten (ook geannuleerde) worden overgeslagen; onbekende teams en niet-beschikbare wedstrijden worden afzonderlijk geteld. De database controleert beheerrechten, vergrendelt wedstrijden tegen dubbele gelijktijdige aanmaak en schrijft de tellingen naar audit_log. De hele actie is één transactie; herhalen maakt geen dubbele actieve diensten.
+
+## Dienstenmenu en overige diensten (013)
+
+Beheer heeft een uitklapbaar Diensten-menu met Wedstrijden, Bardiensten, Evenementen, Overige diensten en Planning. De drie aanmaakpagina’s gebruiken dezelfde bestaande puntenberekening (1 uur = 1 punt per deelnemer), weekreeksen en teamreservering. Overige diensten krijgen een zelfgekozen titel en soort `other`. Voer `supabase/migrations/013_other_duties.sql` uit om deze extra soort toe te staan; bestaande diensten worden behouden. De bestaande beheerrollen blijven vereist.

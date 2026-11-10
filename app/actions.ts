@@ -78,19 +78,19 @@ export async function changeEnrollment(f: FormData) {
   });
 }
 export async function createDuty(f: FormData) {
-  await run('/beheer/planning', async () => {
+  await run(['/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten'].includes(text(f,'return_to'))?text(f,'return_to'):'/beheer/planning', async () => {
     const { db } = await manager();
     const start = fromZonedTime(text(f, 'start'), 'Europe/Amsterdam');
     const end = fromZonedTime(text(f, 'end'), 'Europe/Amsterdam');
     if (!Number.isFinite(start.getTime()) || !Number.isFinite(end.getTime()) || end <= start) throw new Error('Controleer de begin- en eindtijd.');
     const { error } = await db.rpc('create_default_duty', {
-      p_season: id.parse(f.get('season_id')), p_title: z.string().min(1).max(200).parse(text(f, 'title')),
-      p_kind: z.enum(['bar','referee','event','lines']).parse(f.get('kind')), p_start: start.toISOString(), p_end: end.toISOString(),
+      p_season: id.parse(f.get('season_id')), p_title: z.string().trim().min(1).max(200).parse(text(f, 'title')),
+      p_kind: z.enum(['bar','referee','event','lines','other']).parse(f.get('kind')), p_start: start.toISOString(), p_end: end.toISOString(),
       p_location: z.string().min(1).parse(text(f, 'location')), p_capacity: z.number().int().min(1).max(100).parse(number(f.get('capacity'))),
       p_qualification: f.get('kind')==='referee'?refereeLevelSchema.parse(text(f,'qualification')):null,
       p_team: f.get('team_id') ? id.parse(f.get('team_id')) : null, p_repeat: z.number().int().min(1).max(53).parse(number(f.get('repeat'))),
     });
-    if (error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om de nieuwe dienstinstellingen te gebruiken.':error.message);
+    if (error) throw new Error(error.code==='23514'&&f.get('kind')==='other'?'Voer migratie 013_other_duties.sql uit om overige diensten aan te maken.':error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om de nieuwe dienstinstellingen te gebruiken.':error.message);
   });
 }
 export async function saveSeason(_previous:SeasonFormState,f:FormData):Promise<SeasonFormState> {
