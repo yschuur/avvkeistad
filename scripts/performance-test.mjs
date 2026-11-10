@@ -210,11 +210,16 @@ const mock=createServer(async(req,res)=>{
    const id=url.searchParams.get('member_id')?.replace('eq.','');
    result=(id?[id]:[memberA,memberB,admin]).map(member_id=>({member_id,season_id:season,team_id:teamAssignments.get(member_id) ?? teamId,captain:member_id===memberA&&captainA,norm_override:null}));
  }
- if(url.pathname==='/rest/v1/duties') result=[testMatch.referee_duties.length?{...testDuty,...testMatch.referee_duties[0],match_id:testMatch.id,starts_at:testMatch.starts_at,ends_at:new Date(new Date(testMatch.starts_at).getTime()+5400000).toISOString()}:testDuty,...extraDuties];
+ const allDutyRows=[testMatch.referee_duties.length?{...testDuty,...testMatch.referee_duties[0],match_id:testMatch.id,starts_at:testMatch.starts_at,ends_at:new Date(new Date(testMatch.starts_at).getTime()+5400000).toISOString()}:testDuty,...extraDuties];
+ const inWindow=(d,prefix='')=>[...url.searchParams].every(([k,v])=>{
+  if(k===prefix+'starts_at'&&v.startsWith('lt.'))return new Date(d.starts_at)<new Date(v.slice(3));
+  if(k===prefix+'ends_at'&&v.startsWith('gt.'))return new Date(d.ends_at)>new Date(v.slice(3));return true;
+ });
+ if(url.pathname==='/rest/v1/duties') result=allDutyRows.filter(d=>inWindow(d));
  if(url.pathname==='/rest/v1/enrollments') {
   const member=url.searchParams.get('member_id')?.replace('eq.','');
   const ownBase=!hideTestEnrollment?[{id:'85000000-0000-4000-8000-000000000001',member_id:memberA,duty_id:testDuty.id,created_at:new Date(Date.now()-3600000).toISOString(),revoked:false,offered:false}]:[];
-  result=[...ownBase,...extraEnrollments].filter(e=>!member||e.member_id===member);
+  result=[...ownBase,...extraEnrollments].filter(e=>(!member||e.member_id===member)&&allDutyRows.some(d=>d.id===e.duty_id&&inWindow(d,'duties.')));
  }
  if(url.pathname==='/rest/v1/rpc/duty_participants') result=[...(!hideTestEnrollment?[{duty_id:testDuty.id,member_id:memberA}]:[]),...extraEnrollments].filter(e=>!e.revoked).map(e=>({duty_id:e.duty_id,first_name:profile(e.member_id).first_name,last_name:profile(e.member_id).last_name}));
  if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))];
@@ -242,6 +247,12 @@ try {
   const db=createServerClient(mockUrl,'sb_publishable_local_test',{cookies:{getAll:()=>[...jar].map(([name,value])=>({name,value})),setAll:values=>values.forEach(({name,value})=>jar.set(name,value))}});
   const {error}=await db.auth.signInWithPassword({email,password:'local-test-password'});assert.equal(error,null);
   return [...jar].map(([k,v])=>`${k}=${v}`).join('; ');
+ }
+ async function openPlanningDuty(page) {
+  const link=page.getByRole('link',{name:'Dienst beheren',exact:true}).first();
+  if(await page.locator('.duty-management-detail[open]').count())return;
+  const date=page.locator('.planning-day>summary').first();if(await date.count()&&!await link.isVisible())await date.click();
+  await link.click();await page.locator('.duty-management-detail[open]').first().waitFor();
  }
  const cookieA=await session('anna@example.test'), cookieB=await session('bram@example.test');
  async function load(path,cookie){const before=performance.now();const response=await fetch(base+path,{headers:{cookie}});const html=await response.text();assert.equal(response.status,200);return {html,ms:Math.round(performance.now()-before)};}
@@ -568,7 +579,7 @@ try {
   if(process.env.SCREENSHOT_DIR) await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/planning-${width}.png`,fullPage:true});
   await page.goto(base+'/beheer/bardiensten');await page.locator('.duty-management-detail>summary').first().click();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR) await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/bar-${width}.png`,fullPage:true});
  }
- await page.goto(base+'/beheer/planning?status=open');assert.equal(await page.getByText('Volle bardienst',{exact:true}).count(),0);await page.getByText('Bardienst Amerena',{exact:true}).waitFor();
+ await page.goto(base+'/beheer/planning?status=open');assert.equal(await page.getByText('Volle bardienst',{exact:true}).count(),0);await page.locator('.planning-day>summary').first().click();await page.getByText('Bardienst Amerena',{exact:true}).waitFor();
  console.log('Focused management: create routes, edit, assignment, deletion, open filter, desktop/mobile overflow passed.');
 
  Object.assign(testDuty,savedDuty);extraDuties=savedDuties;extraEnrollments=savedEnrollments;authWrites.splice(writeStart);await adminPage.setViewportSize({width:1280,height:950});}
@@ -779,17 +790,17 @@ try {
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
  await adminPage.reload();assert.equal(await adminPage.getByLabel('Standaardpunten per fluitbeurt',{exact:true}).inputValue(),'3.25');
  assert.equal(testDuty.points,2);
- await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
+ await adminPage.goto(base+'/beheer/planning');await openPlanningDuty(adminPage);
  const reservation=adminPage.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');
  await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
- await adminPage.reload();await adminPage.locator('.duty-management-detail>summary').first().click();assert.equal(await reservation.getByLabel('Toewijzen aan team',{exact:true}).inputValue(),teamId);
+ await adminPage.reload();await openPlanningDuty(adminPage);assert.equal(await reservation.getByLabel('Toewijzen aan team',{exact:true}).inputValue(),teamId);
  if(process.env.SCREENSHOT_DIR) {
   for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamreservering-planning-${width}.png`,fullPage:true});}
   await adminPage.setViewportSize({width:1280,height:950});
  }
- if(!await reservation.getByLabel('Toewijzen aan team',{exact:true}).isVisible()) await adminPage.locator('.duty-management-detail>summary').first().click();
+ if(!await reservation.getByLabel('Toewijzen aan team',{exact:true}).isVisible()) await openPlanningDuty(adminPage);
  await reservation.getByLabel('Toewijzen aan team',{exact:true}).selectOption('');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),reservation.getByRole('button',{name:'Team opslaan',exact:true}).click()]);
  await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
@@ -900,7 +911,7 @@ try {
  await page.locator('.duty-day summary').first().click();
  await page.getByText('Je hebt niet het vereiste scheidsrechtersniveau.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
- await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
+ await adminPage.goto(base+'/beheer/planning');await openPlanningDuty(adminPage);
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');
  await requirementForm.getByLabel('Vereist niveau',{exact:true}).selectOption('R2.2');
  await Promise.all([adminPage.waitForResponse(r=>r.request().method()==='POST' && new URL(r.url()).pathname==='/beheer/planning'),requirementForm.getByRole('button',{name:'Niveau opslaan'}).click()]);await adminPage.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
@@ -911,7 +922,7 @@ try {
  hideTestEnrollment=false;testDuty.kind='bar';testDuty.required_qualification=null;testDuty.required_level=0;
  console.log('Scheidsrechtersniveaus geslaagd: acht codes in opgegeven volgorde, R2.2 opslaan/herladen, bestaand dienstniveau aanpassen en blokkeren van te laag niveau. Alleen lokale testgegevens.');
  // A destructive action requires confirmation; dismissing does not submit.
- await adminPage.goto(base+'/beheer/planning');await adminPage.locator('.duty-management-detail>summary').first().click();
+ await adminPage.goto(base+'/beheer/planning');await openPlanningDuty(adminPage);
  await adminPage.getByRole('button',{name:'Dienst verwijderen',exact:true}).click();
  await adminPage.getByRole('dialog',{name:'Actie bevestigen'}).waitFor();
  await adminPage.getByRole('button',{name:'Annuleren',exact:true}).click();
@@ -1175,7 +1186,7 @@ try {
  // Team assignment and default-based match creation also work through touch.
  const previousMatch={...testMatch},wasCancelled=testDuty.cancelled;
  testDuty.cancelled=false;
- await manageTouch.goto(base+'/beheer/planning');await manageTouch.locator('.duty-management-detail>summary').first().tap();
+ await manageTouch.goto(base+'/beheer/planning');await openPlanningDuty(manageTouch);
  const touchTeam=manageTouch.getByRole('button',{name:'Team opslaan',exact:true}).first().locator('xpath=ancestor::form');
  await touchTeam.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
  await Promise.all([manageTouch.waitForResponse(r=>r.request().method()==='POST'&&new URL(r.url()).pathname==='/beheer/planning'),touchTeam.getByRole('button',{name:'Team opslaan',exact:true}).tap()]);
@@ -1210,6 +1221,34 @@ try {
  console.log('Designcontrole geslaagd: huisstijlpreview, opslaan/herladen/reset, member-toegangsbeperking, bevestigingsdialoog, mobiele navigatie en overflow op 320/390/768/1440 px. Alleen testfixtures.');
  console.log('Auth-integratie geslaagd: admin inloggen/beheer, onjuiste credentials, herstelmail zonder accountonthulling, standaard- en token-hash-herstellinks, wachtwoord wijzigen en opnieuw inloggen met exacte wachtwoordtekens. Geen echte e-mails verstuurd.');
  console.log(`Performance-integratie geslaagd: dashboard 9 API-requests (${dashboard.ms}ms), wedstrijden 7 (${matches.ms}ms), elk met 150ms nagebootste API-latentie. Geen Auth HTTP-requests bij warme JWT-verificatie; gebruikersisolatie, redirects, formulier- en navigatiefeedback gecontroleerd. Geen productiemeting.`);
+
+ {const page=adminPage;testSeasons=[{...initialSeason}];testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];teamAssignments.clear();captainA=false;hideTestEnrollment=false;testMatch.referee_duties=[];matchFilterFixtures=null;Object.assign(testDuty,{cancelled:false,kind:'bar',signup_closed:false,assigned_team_id:null,capacity:2,points:2,required_level:0,required_qualification:null});
+ Object.assign(testDuty,{title:'Novemberdienst',starts_at:'2026-11-25T17:00:00Z',ends_at:'2026-11-25T19:00:00Z'});
+ const decemberId='50000000-0000-4000-8000-000000000012',crossId='50000000-0000-4000-8000-000000000013';
+ extraDuties=[{...testDuty,id:decemberId,title:'Decemberdienst',starts_at:'2026-12-01T01:00:00Z',ends_at:'2026-12-01T03:00:00Z'},{...testDuty,id:crossId,title:'Maandgrensdienst',starts_at:'2026-11-30T22:30:00Z',ends_at:'2026-12-01T02:00:00Z'},{...testDuty,id:'50000000-0000-4000-8000-000000000014',title:'Januaridienst',starts_at:'2027-01-15T17:00:00Z',ends_at:'2027-01-15T19:00:00Z'}];
+ extraEnrollments=[{id:'85000000-0000-4000-8000-000000000012',duty_id:crossId,member_id:memberB,revoked:false,offered:false}];
+ records.length=0;
+ await page.goto(base+'/beheer/planning?month=2026-11');await page.getByRole('heading',{name:'Planning',exact:true}).waitFor();
+ assert.equal(await page.locator('.planning-day').count(),2);assert.equal(await page.locator('.planning-day[open]').count(),0);assert.equal(await page.locator('.duty-management-detail').count(),0);assert.equal(await page.getByText('Decemberdienst',{exact:true}).count(),0);
+ assert.equal(records.some(r=>r.path.endsWith('/function_assignments')||r.path.endsWith('/function_definitions')||r.path.endsWith('/duty_availability')),false);
+ const q=records.find(r=>r.path==='/rest/v1/duties').query;assert.equal(q.get('starts_at'),'lt.2026-11-30T23:00:00.000Z');assert.equal(q.get('ends_at'),'gt.2026-10-31T23:00:00.000Z');
+ await page.getByLabel('Kies maand',{exact:true}).selectOption('2026-12');await page.getByRole('button',{name:'Ga',exact:true}).click();await page.waitForURL(u=>u.searchParams.get('month')==='2026-12');
+ assert.equal(await page.locator('.planning-day').count(),1);assert.equal(await page.getByText('Novemberdienst',{exact:true}).count(),0);assert.equal(await page.getByText('Maandgrensdienst',{exact:true}).count(),0);assert.equal(await page.getByText('Januaridienst',{exact:true}).count(),0);
+ await page.locator('.planning-day>summary').click();await page.getByRole('link',{name:'Dienst beheren',exact:true}).click();await page.locator('.duty-management-detail[open]').waitFor();
+ assert.equal(await page.getByLabel('Lid toewijzen',{exact:true}).locator(`option[value="${memberB}"]`).isDisabled(),true);
+ const team=page.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');await team.getByLabel('Toewijzen aan team',{exact:true}).selectOption(teamId);
+ await Promise.all([page.waitForResponse(r=>r.request().method()==='POST'),team.getByRole('button',{name:'Team opslaan',exact:true}).click()]);await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.equal(new URL(page.url()).searchParams.get('month'),'2026-12');assert.equal(new URL(page.url()).searchParams.get('duty'),decemberId);assert.equal(await page.locator('.planning-day[open]').count(),1);
+ if(process.env.SCREENSHOT_DIR) await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,1440]) {await page.setViewportSize({width,height:950});await page.goto(base+'/beheer/planning?month=2026-12');assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.locator('.planning-day>summary').click();if(process.env.SCREENSHOT_DIR) await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/planning-${width}.png`,fullPage:true});}
+ // Directly jump over multiple pages while retaining a match filter.
+ matchFilterFixtures=Array.from({length:551},(_,i)=>({...testMatch,id:`70000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`,home_team:'AVV Keistad HS 4',away_team:'Andere club '+i,starts_at:'2027-01-15T18:00:00Z',status:'scheduled',referee_duties:[]}));
+ await page.goto(base+'/beheer/wedstrijden?view=all&team=AVV+Keistad+HS+4');const pages=page.getByRole('navigation',{name:'Wedstrijdpagina’s',exact:true});
+ await pages.getByRole('link',{name:'Pagina 12: Pagina 12',exact:true}).click();await page.getByText('Pagina 12 van 12',{exact:true}).waitFor();assert.equal(await page.getByLabel('Kies pagina',{exact:true}).inputValue(),'12');assert.equal(new URL(page.url()).searchParams.get('team'),'AVV Keistad HS 4');
+ await page.getByLabel('Kies pagina',{exact:true}).selectOption('7');await pages.getByRole('button',{name:'Ga',exact:true}).click();await page.getByText('Pagina 7 van 12',{exact:true}).waitFor();assert.equal(new URL(page.url()).searchParams.get('team'),'AVV Keistad HS 4');
+ console.log('Maandplanning en directe paginakeuze geslaagd: maandselectie in database, geen functielading of bulkformulieren, gesloten datums, maandgrensconflict, context na opslaan, mobiel en directe sprong naar pagina 12 en 7 met filters.');
+
+ }
 } finally {
  if(browser) await browser.close();app.kill('SIGTERM');mock.closeAllConnections();await new Promise(resolve=>mock.close(resolve));
 }

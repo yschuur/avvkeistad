@@ -21,8 +21,11 @@ const number = (v: FormDataEntryValue | null) => Number(v);
 const optionalNumber = (v: FormDataEntryValue | null) => v === '' || v === null ? null : Number(v);
 const text = (f: FormData, k: string) => String(f.get(k) ?? '').trim();
 const managementDutyPaths=['/beheer/planning','/beheer/wedstrijden','/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten'];
-const managementDutyPath=(f:FormData)=>managementDutyPaths.includes(text(f,'return_to'))?text(f,'return_to'):'/beheer/planning';
-const dutyReturnPath=(f:FormData)=>{const path=text(f,'return_to');return [...managementDutyPaths,'/mijn-diensten','/team'].includes(path)?path:'/diensten';};
+const managementDutyPath=(f:FormData)=>{
+ const value=text(f,'return_to');
+ try {const url=new URL(value,'https://local.invalid');if(url.origin!=='https://local.invalid'||!managementDutyPaths.includes(url.pathname)) return '/beheer/planning';const query=new URLSearchParams();for(const k of ['month','status','day','team','kind','match','duty']) {const v=url.searchParams.get(k);if(v&&v.length<=200)query.set(k,v);}return url.pathname+(query.size?'?'+query:'');}catch{return '/beheer/planning';}
+};
+const dutyReturnPath=(f:FormData)=>{const path=text(f,'return_to');return managementDutyPaths.includes(path.split('?')[0])?managementDutyPath(f):['/mijn-diensten','/team'].includes(path)?path:'/diensten';};
 const manager = async () => {
   const db = await supabase();
   const { data: { user } } = await db.auth.getUser();
@@ -80,7 +83,7 @@ export async function changeEnrollment(f: FormData) {
   });
 }
 export async function createDuty(f: FormData) {
-  await run(['/beheer/bardiensten','/beheer/evenementen','/beheer/overige-diensten'].includes(text(f,'return_to'))?text(f,'return_to'):'/beheer/planning', async () => {
+  await run(managementDutyPath(f), async () => {
     const { db } = await manager();
     const start = fromZonedTime(text(f, 'start'), 'Europe/Amsterdam');
     const end = fromZonedTime(text(f, 'end'), 'Europe/Amsterdam');

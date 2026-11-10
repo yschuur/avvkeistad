@@ -654,3 +654,23 @@ input[aria-invalid=true] { border-color: var(--danger); }
  .duty-list-filters>label {flex:1 1 140px;min-width:0;}
  .managed-duty-row .team-assignment-form {width:100%;}
 }
+
+.pagination-numbers {display:flex;flex-wrap:wrap;gap:var(--space-1);}
+.pagination-numbers>span {display:flex;gap:var(--space-1);align-items:center;}
+.pagination-numbers [aria-current="page"] {color:var(--accent-text);background:var(--accent-subtle);border-color:var(--accent-text);}
+.pagination-gap {padding:var(--space-1);}
+.pagination-jump {display:flex;flex-wrap:wrap;gap:var(--space-2);align-items:flex-end;}
+.pagination-jump label {display:flex;flex-direction:column;gap:var(--space-1);}
+.planning-day {border-top:1px solid var(--border);margin-top:var(--space-2);}
+.planning-day>summary {display:flex;flex-wrap:wrap;justify-content:space-between;gap:var(--space-2);cursor:pointer;padding:var(--space-3) 0;min-height:44px;}
+.planning-day>summary::before {content:'▸';}
+.planning-day[open]>summary::before {content:'▾';}
+.planning-day>summary>strong {margin-right:auto;}
+.planning-day>summary>span {font-size:12px;}
+.planning-manage-link {color:var(--accent-text);display:inline-flex;align-items:center;min-height:44px;}
+.managed-duty-row {scroll-margin-top:88px;}
+@media(max-width:768px) {.pagination {justify-content:flex-start;gap:var(--space-2);}.pagination-jump {width:100%;}.planning-day>summary>span {flex-basis:100%;}}
+
+.pagination-jump {flex-wrap:nowrap;min-width:220px;max-width:360px;}
+.pagination-choice {display:grid;gap:var(--space-1);flex:1;min-width:0;}
+.pagination-choice select {width:100%;}
