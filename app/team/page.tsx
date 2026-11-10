@@ -1,7 +1,8 @@
 import { TableCell } from '@/components/responsive-table';
 import { redirect } from 'next/navigation';
 import { getData,memberProgress } from '@/lib/data';
-import { teamDutyCandidates } from '@/lib/member-duties';
+import { teamDutyOptions } from '@/lib/member-duties';
+import { isRefereeLevel } from '@/lib/referee-levels';
 import { Shell } from '@/components/shell';
 import { Heading,Notice,date,time } from '@/components/ui';
 import { SubmitButton } from '@/components/submit-button';
@@ -14,7 +15,22 @@ export default async function TeamPage({searchParams}:{searchParams:Promise<Reco
   const members=data.memberships.filter(m=>m.team_id===t.id),scores=members.map(m=>memberProgress(data,m.member_id));
   const duties=data.duties.filter(d=>d.assigned_team_id===t.id&&!d.cancelled&&!d.signup_closed&&new Date(d.starts_at)>new Date()&&(data.availability.find(a=>a.duty_id===d.id)?.occupied ?? 0)<d.capacity);
   return <section key={t.id} className="panel"><h2>{t.name}</h2><dl className="stats-grid member-stats team-points">{[['Behaald',scores.reduce((n,p)=>n+p.earned,0)],['Ingepland',scores.reduce((n,p)=>n+p.planned,0)],['Nog te behalen',scores.reduce((n,p)=>n+p.toEarn,0)]].map(([label,value])=><div className="stat-item" key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl>
-  <div className="table-wrap mobile-table" role="region" aria-label="Teampunten" tabIndex={0}><table role="table"><thead><tr role="row"><th>Lid</th><th className="numeric">Norm</th><th className="numeric">Behaald</th><th className="numeric">Ingepland</th><th className="numeric">Nog te behalen</th></tr></thead><tbody>{members.map(m=>{const p=data.profiles.find(p=>p.id===m.member_id),points=memberProgress(data,m.member_id);return <tr role="row" key={m.member_id}><TableCell label="Lid" data-featured="true">{p?.first_name} {p?.last_name}{m.captain&&<span className="captain-tag">Aanvoerder</span>}</TableCell><TableCell label="Norm" className="numeric">{points.norm}</TableCell><TableCell label="Behaald" className="numeric">{points.earned}</TableCell><TableCell label="Ingepland" className="numeric">{points.planned}</TableCell><TableCell label="Nog te behalen" className="numeric">{points.toEarn}</TableCell></tr>;})}</tbody></table></div>
-  <h3 className="subheading">Teamdiensten toewijzen</h3>{!duties.length&&<p className="empty-state">Geen openstaande teamdiensten.</p>}{duties.map(d=>{const candidates=teamDutyCandidates(data,d,t.id),count=data.availability.find(a=>a.duty_id===d.id)?.occupied ?? 0;return <form action={enroll} key={d.id} className="correction-row"><input name="duty_id" type="hidden" value={d.id}/><input name="return_to" type="hidden" value="/team"/><span><strong>{d.title}</strong><small>{date(d.starts_at)} · {time(d.starts_at)}–{time(d.ends_at)} · {d.location} · {count}/{d.capacity} gevuld</small>{d.kind==='referee'&&<small>Minimaal {d.required_qualification ?? 'nog in te stellen'}</small>}{!candidates.length&&<small>Geen beschikbaar teamlid met het juiste niveau.</small>}</span><select name="member_id" required aria-label="Teamlid toewijzen" disabled={!candidates.length}><option value="">Kies een teamlid</option>{candidates.map(p=><option key={p.id} value={p.id}>{p.first_name} {p.last_name}</option>)}</select><SubmitButton className="button secondary" disabled={!candidates.length}>Toewijzen</SubmitButton></form>;})}</section>;
+  <div className="table-wrap mobile-table" role="region" aria-label="Teampunten" tabIndex={0}><table role="table"><thead><tr role="row"><th>Lid</th><th>Scheidsrechtersniveau</th><th className="numeric">Norm</th><th className="numeric">Behaald</th><th className="numeric">Ingepland</th><th className="numeric">Nog te behalen</th></tr></thead><tbody>{members.map(m=>{const p=data.profiles.find(p=>p.id===m.member_id),points=memberProgress(data,m.member_id);return <tr role="row" key={m.member_id}><TableCell label="Lid" data-featured="true">{p?.first_name} {p?.last_name}{m.captain&&<span className="captain-tag">Aanvoerder</span>}</TableCell><TableCell label="Scheidsrechtersniveau">{isRefereeLevel(p?.referee_qualification)?p.referee_qualification:'Niet ingesteld'}</TableCell><TableCell label="Norm" className="numeric">{points.norm}</TableCell><TableCell label="Behaald" className="numeric">{points.earned}</TableCell><TableCell label="Ingepland" className="numeric">{points.planned}</TableCell><TableCell label="Nog te behalen" className="numeric">{points.toEarn}</TableCell></tr>;})}</tbody></table></div>
+  <h3 className="subheading">Teamdiensten toewijzen</h3>{!duties.length&&<p className="empty-state">Geen openstaande teamdiensten.</p>}{duties.map(d=>{
+   const options=teamDutyOptions(data,d,t.id),blocked=options.filter(o=>o.reason),available=options.some(o=>!o.reason),count=data.availability.find(a=>a.duty_id===d.id)?.occupied ?? 0;
+   const pickerId=`team-duty-${t.id}-${d.id}`,helpId=`${pickerId}-help`;
+   return <form action={enroll} key={d.id} className="correction-row team-duty-assignment">
+    <input name="duty_id" type="hidden" value={d.id}/><input name="return_to" type="hidden" value="/team"/>
+    <span><strong>{d.title}</strong><small>{date(d.starts_at)} · {time(d.starts_at)}–{time(d.ends_at)} · {d.location} · {count}/{d.capacity} gevuld</small>{d.kind==='referee'&&<small>Minimaal {d.required_qualification ?? 'nog in te stellen'} of hoger</small>}{!available&&<small>Geen beschikbaar teamlid dat deze dienst mag uitvoeren.</small>}</span>
+    <div className="team-duty-picker">
+     <label htmlFor={pickerId}>Teamlid toewijzen</label>
+     <select id={pickerId} name="member_id" required aria-describedby={blocked.length?helpId:undefined} disabled={!available}>
+      <option value="">Kies een teamlid</option>{options.map(({profile:p,reason})=><option key={p.id} value={p.id} disabled={Boolean(reason)}>{p.first_name} {p.last_name}{d.kind==='referee'?` · ${isRefereeLevel(p.referee_qualification)?p.referee_qualification:'Niet ingesteld'}`:''}{reason?` — ${reason}`:''}</option>)}
+     </select>
+     {blocked.length>0&&<div id={helpId} className="team-duty-blocked"><small>Niet kiesbaar</small><ul>{blocked.map(({profile:p,reason})=><li key={p.id}><strong>{p.first_name} {p.last_name}</strong><span>{reason}</span></li>)}</ul></div>}
+    </div>
+    <SubmitButton className="button secondary" disabled={!available}>Toewijzen</SubmitButton>
+   </form>;
+  })}</section>;
  })}</Shell>;
 }

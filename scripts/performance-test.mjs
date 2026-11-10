@@ -306,7 +306,7 @@ try {
  assert.equal(await page.getByText('bram@example.test',{exact:true}).count(),0);
  assert.equal(await page.locator('input[name=qualification],input[name=role],input[name=norm]').count(),0);
  await page.goto(base+'/team');await page.waitForURL(base+'/');
- // A captain sees only their own team and only eligible, free own-team members.
+ // A captain sees every own-team player's licence; ineligible players stay visible but disabled.
  const reservedId='50000000-0000-4000-8000-000000000004',otherTeam='30000000-0000-4000-8000-000000000002';
  captainA=true;teamAssignments.set(admin,otherTeam);
  testTeams=[{id:teamId,name:'Eigen testteam',age_class:'senior',competition_level:null},{id:otherTeam,name:'Ander testteam',age_class:'senior',competition_level:null}];
@@ -316,7 +316,42 @@ try {
  assert.equal(await page.getByRole('heading',{name:'Dienst van ander team',exact:true}).count(),0);
  assert.equal(await page.getByRole('region',{name:'Teampunten'}).getByText('Alex Test',{exact:true}).count(),0);
  const assign=page.getByRole('button',{name:'Toewijzen',exact:true}).locator('xpath=ancestor::form');
- assert.deepEqual(await assign.getByLabel('Teamlid toewijzen').locator('option').allTextContents(),['Kies een teamlid','Bram Test']);
+ const captainPicker=assign.getByLabel('Teamlid toewijzen',{exact:true});
+ assert.equal(await captainPicker.locator('option').count(),3);
+ assert.equal(await captainPicker.locator(`option[value="${memberA}"]`).isDisabled(),true);
+ assert.match(await captainPicker.locator(`option[value="${memberA}"]`).textContent(),/Anna Test · V6.*Niet de juiste scheidsrechterslicentie/);
+ assert.equal(await captainPicker.locator(`option[value="${memberB}"]`).isDisabled(),false);
+ assert.equal(await captainPicker.locator(`option[value="${admin}"]`).count(),0);
+ await assign.locator('.team-duty-blocked').getByText('Anna Test',{exact:true}).waitFor();
+ await assign.locator('.team-duty-blocked').getByText('Niet de juiste scheidsrechterslicentie: V6; minimaal R1 vereist.',{exact:true}).waitFor();
+ const roster=page.getByRole('region',{name:'Teampunten'});
+ await roster.getByRole('columnheader',{name:'Scheidsrechtersniveau',exact:true}).waitFor();
+ await roster.locator('tbody tr').filter({hasText:'Anna Test'}).getByRole('cell',{name:'V6',exact:true}).waitFor();
+ await roster.locator('tbody tr').filter({hasText:'Bram Test'}).getByRole('cell',{name:'N1',exact:true}).waitFor();
+ // Missing qualifications also block assignment, even when no player can be picked.
+ refereeQualifications.delete(memberB);
+ await page.reload();await page.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ assert.equal(await captainPicker.isDisabled(),true);
+ assert.equal(await assign.getByRole('button',{name:'Toewijzen',exact:true}).isDisabled(),true);
+ await assign.locator('.team-duty-blocked').getByText('Niet de juiste scheidsrechterslicentie: niveau niet ingesteld; minimaal R1 vereist.',{exact:true}).waitFor();
+ await roster.locator('tbody tr').filter({hasText:'Bram Test'}).getByRole('cell',{name:'Niet ingesteld',exact:true}).waitFor();
+ refereeQualifications.set(memberB,'N1');
+ await page.reload();await page.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ if(process.env.SCREENSHOT_DIR) {
+  for(const width of [390,1440]) {await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/aanvoerder-niveaus-${width}.png`,fullPage:true});}
+ }
+ const captainTouchContext=await browser.newContext({viewport:{width:390,height:844},isMobile:true,hasTouch:true,deviceScaleFactor:2});
+ await captainTouchContext.addCookies(await page.context().cookies());
+ const captainTouch=await captainTouchContext.newPage();
+ await captainTouch.goto(base+'/team');await captainTouch.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ const touchPicker=captainTouch.getByLabel('Teamlid toewijzen',{exact:true});
+ assert.equal(await touchPicker.locator(`option[value="${memberA}"]`).isDisabled(),true);
+ await captainTouch.locator('.team-duty-blocked').getByText('Niet de juiste scheidsrechterslicentie: V6; minimaal R1 vereist.',{exact:true}).waitFor();
+ assert.ok((await touchPicker.boundingBox()).height>=44);
+ assert.equal(await captainTouch.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+ await touchPicker.selectOption(memberB);
+ assert.equal(await touchPicker.inputValue(),memberB);
+ await captainTouchContext.close();
  await assign.getByLabel('Teamlid toewijzen').selectOption(memberB);await assign.getByRole('button',{name:'Toewijzen',exact:true}).click();
  await page.waitForURL(url=>url.pathname==='/team'&&url.searchParams.has('success'));
  await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();

@@ -160,6 +160,15 @@ td strong { font-weight: 500; }
 .correction-row small { display: block; font-size: 11px; color: var(--text-muted); margin-top: var(--space-1); }
 .correction-row input:not([type=hidden]), .correction-row select { max-width: 230px; }
 .correction-row > form { display: flex; gap: var(--space-2); align-items: center; }
+.team-duty-picker { flex: 1; min-width: 0; display: grid; gap: var(--space-2); }
+.team-duty-picker label { font-size: 12px; }
+.correction-row .team-duty-picker select { width: 100%; max-width: none; }
+.team-duty-picker option:disabled { color: var(--text-muted); }
+.team-duty-blocked { color: var(--text-muted); font-size: 12px; }
+.team-duty-blocked ul { list-style: none; padding: 0; margin: 0; }
+.team-duty-blocked li { margin-top: var(--space-2); overflow-wrap: anywhere; }
+.team-duty-blocked li span { display: block; }
+.team-duty-assignment { align-items: flex-start; }
 .notice, .info-strip { padding: var(--space-3) var(--space-4); background: var(--surface-subtle); border: 1px solid var(--border); border-radius: var(--radius); font-size: 12px; line-height: 1.6; margin-bottom: var(--space-5); color: var(--text-muted); }
 .notice a, .info-strip a { text-decoration: underline; text-underline-offset: 3px; }
 .notice.error { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }

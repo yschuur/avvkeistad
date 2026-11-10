@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { openMemberDuties,ownDutyEntries,teamDutyCandidates } from '../lib/member-duties';
+import { openMemberDuties,ownDutyEntries,teamDutyCandidates,teamDutyOptions } from '../lib/member-duties';
+import { REFEREE_LEVELS } from '../lib/referee-levels';
 import type { AppData } from '../lib/data';
 import type { Duty,Profile,Enrollment } from '../lib/domain';
 const now=new Date('2027-01-01T12:00:00Z');
@@ -25,4 +26,29 @@ test('aanvoerder kan alleen beschikbare en bevoegde leden van het eigen team kie
  assert.deepEqual(teamDutyCandidates(d,ref,'own').map(p=>p.id),['teammate']);
  d.duties=[duty('conflict')];d.enrollments=[enrollment('booked','conflict','teammate')];
  assert.deepEqual(teamDutyCandidates(d,ref,'own'),[]);
+});
+test('alle eigen spelers blijven zichtbaar met correcte licentiereden voor elk vereist niveau',()=>{
+ const d=data();
+ for(const required of REFEREE_LEVELS) for(const qualification of REFEREE_LEVELS) {
+  d.profiles[0]={...d.profiles[0],referee_qualification:qualification,referee_level:99};
+  const options=teamDutyOptions(d,duty('ref',{kind:'referee',required_qualification:required}),'own');
+  assert.deepEqual(options.map(o=>o.profile.id),['me','teammate']);
+  const option=options[0],eligible=REFEREE_LEVELS.indexOf(qualification)>=REFEREE_LEVELS.indexOf(required);
+  assert.equal(option.reason===null,eligible,`${qualification} for ${required}`);
+  if(!eligible) {assert.match(option.reason!,/Niet de juiste scheidsrechterslicentie/);assert.ok(option.reason!.includes(`minimaal ${required} vereist`));}
+ }
+ for(const qualification of [null,undefined,'onbekend']) {
+  d.profiles[0]={...d.profiles[0],referee_qualification:qualification,referee_level:99};
+  assert.match(teamDutyOptions(d,duty('ref',{kind:'referee',required_qualification:'V6'}),'own')[0].reason!,/niveau niet ingesteld/);
+ }
+ assert.match(teamDutyOptions(d,duty('ref',{kind:'referee'}),'own')[1].reason!,/beheerder/);
+});
+test('beschikbare licenties blijven onderscheiden van inschrijvingen en roosterconflicten',()=>{
+ const d=data(),ref=duty('ref',{kind:'referee',required_qualification:'V4'});
+ d.duties=[ref,duty('overlap'),duty('cancelled',{cancelled:true})];
+ d.enrollments=[enrollment('assigned','ref'),enrollment('overlap','overlap','teammate')];
+ assert.deepEqual(teamDutyOptions(d,ref,'own').map(o=>o.reason),['Al toegewezen aan deze dienst.','Al ingepland op een overlappende dienst.']);
+ d.enrollments=[enrollment('revoked','overlap','me',true),enrollment('cancelled','cancelled','teammate')];
+ assert.deepEqual(teamDutyOptions(d,ref,'own').map(o=>o.reason),[null,null]);
+ assert.equal(teamDutyOptions(d,duty('bar'),'own').length,2,'Bar duties do not require a referee licence');
 });
