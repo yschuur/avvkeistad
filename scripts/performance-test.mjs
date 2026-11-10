@@ -443,13 +443,18 @@ try {
  assert.equal(await page.locator('.duty-day[open]').count(),0);
  await page.locator('.duty-day summary').last().focus();await page.keyboard.press('Enter');
  const fullRow=page.getByRole('article').filter({hasText:'Volle teamdienst'});
- await fullRow.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
+ await fullRow.getByRole('list',{name:'Aangemelde leden'}).getByText('Bram Test',{exact:true}).waitFor();
+ assert.equal(await fullRow.locator('.duty-main').evaluate(el=>el.firstElementChild.classList.contains('duty-type')),true);
+ assert.equal(await fullRow.locator('.duty-type').count(),1);
+ assert.equal(await fullRow.locator('.duty-availability').count(),0);
+ assert.equal(await fullRow.getByText('Nog niemand ingepland.',{exact:true}).count(),0);
+
  await fullRow.locator('.duty-capacity').getByText('Vol',{exact:true}).waitFor();
  assert.equal(await fullRow.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
  await page.getByLabel('Team',{exact:true}).selectOption(teamId);await page.getByRole('button',{name:'Filteren',exact:true}).click();
  await page.waitForURL(url=>url.pathname==='/diensten'&&url.searchParams.get('team')===teamId);
  assert.equal(await page.locator('.duty-day').count(),1);
- await page.locator('.duty-day summary').click();await page.getByText('Ingepland: Bram Test',{exact:true}).waitFor();
+ await page.locator('.duty-day summary').click();await page.getByRole('list',{name:'Aangemelde leden'}).getByText('Bram Test',{exact:true}).waitFor();
  if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/diensten-per-dag-${width}.png`,fullPage:true});}
  assert.equal(await page.getByLabel('Type dienst',{exact:true}).locator('option[value=lines]').count(),0);
  await page.getByLabel('Alleen open diensten',{exact:true}).check();await page.getByRole('button',{name:'Filteren',exact:true}).click();
@@ -829,7 +834,7 @@ try {
  hideTestEnrollment=true;testDuty.kind='referee';testDuty.required_qualification='N3';testDuty.required_level=6;
  await page.goto(base+'/diensten');
  await page.locator('.duty-day summary').first().click();
- await page.getByText('Scheidsrechtersniveau N3 vereist',{exact:true}).waitFor();
+ await page.getByText('Je hebt niet het vereiste scheidsrechtersniveau.',{exact:true}).waitFor();
  assert.equal(await page.getByRole('button',{name:'Inschrijven',exact:true}).isDisabled(),true);
  await adminPage.goto(base+'/beheer/planning');
  const requirementForm=adminPage.getByRole('button',{name:'Niveau opslaan'}).locator('xpath=ancestor::form');

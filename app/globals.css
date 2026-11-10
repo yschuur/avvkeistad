@@ -592,3 +592,12 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .duty-capacity.has-vacancy strong { color: var(--accent-text); }
 .member-duty-filters .checkbox-label { display: inline-flex; flex-direction: row; align-items: center; gap: var(--space-2); min-height: 44px; }
 .member-duty-filters input[type=checkbox] { accent-color: var(--accent-text); width: 18px; height: 18px; min-height: 18px; flex-shrink: 0; }
+
+.day-duty-list .duty-main > .duty-type { margin-bottom: var(--space-2); }
+
+.day-duty-list .duty-roster { display: grid; gap: var(--space-2); }
+.duty-roster-label { font-weight: 600; color: var(--text); }
+.duty-roster ul { display: flex; flex-wrap: wrap; gap: var(--space-2); list-style: none; padding: 0; margin: 0; }
+.duty-roster li { display: flex; align-items: center; gap: var(--space-2); min-width: 0; max-width: 100%; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-subtle); color: var(--text); }
+.duty-roster li > span:last-child { overflow-wrap: anywhere; min-width: 0; }
+.duty-roster .avatar { width: 24px; height: 24px; font-size: 10px; }
