@@ -611,3 +611,11 @@ input[aria-invalid=true] { border-color: var(--danger); }
 
 .day-duty-list .duty-meta { overflow-wrap: anywhere; }
 .day-duty-list .duty-meta > span { min-width: 0; }
+
+.member-group-credits { list-style: none; margin: 0; padding: 0; }
+.member-group-credits li { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: var(--space-2) var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.member-group-credits li > span { min-width: 0; overflow-wrap: anywhere; }
+.member-group-credits strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.member-group-total { margin-top: var(--space-3); margin-bottom: var(--space-2); font-size: 12px; }
+.member-function-groups .section-heading { flex-wrap: wrap; align-items: baseline; }
+.member-function-groups .section-heading > span { min-width: 0; overflow-wrap: anywhere; }

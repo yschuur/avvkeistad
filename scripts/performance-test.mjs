@@ -199,7 +199,7 @@ const mock=createServer(async(req,res)=>{
   result=testFunctionGroups.filter(g=>g.season_id===url.searchParams.get('season_id')?.replace('eq.',''));
  }
  if(url.pathname==='/rest/v1/function_definitions') result=testFunctions;
- if(url.pathname==='/rest/v1/function_assignments') {const memberId=url.searchParams.get('member_id')?.replace('eq.',''),rows=testAwards.filter(a=>!memberId||a.member_id===memberId),from=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??500);result=rows.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${rows.length}`:`*/${rows.length}`);}
+ if(url.pathname==='/rest/v1/function_assignments') {const memberId=url.searchParams.get('member_id')?.replace('eq.',''),seasonId=url.searchParams.get('season_id')?.replace('eq.',''),rows=testAwards.filter(a=>(!memberId||a.member_id===memberId)&&(!seasonId||a.season_id===seasonId)),from=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??500);result=rows.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${rows.length}`:`*/${rows.length}`);}
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
@@ -989,6 +989,18 @@ try {
  await adminPage.getByRole('alert').filter({hasText:'Voer migratie 009_function_groups.sql uit'}).waitFor();
  assert.equal(await adminPage.getByRole('button',{name:'Functiegroep opslaan',exact:true}).isDisabled(),true);
  functionMigrationMissing=false;
+ // The member dashboard explains their own group credits without double-counting.
+ const memberGroupsBefore=[...testAwards],memberGroupA='61000000-0000-4000-8000-000000000091',memberGroupB='61000000-0000-4000-8000-000000000092';
+ testAwards=[{id:'group-credit-a',member_id:memberA,season_id:season,title:'Wedstrijdcommissie',points:3.5,group_id:memberGroupA,definition_id:null},{id:'group-credit-b',member_id:memberA,season_id:season,title:'Barcommissie',points:0,group_id:memberGroupB,definition_id:null},{id:'function-credit',member_id:memberA,season_id:season,title:'Losse functie',points:2,group_id:null,definition_id:'function-a'},{id:'past-group-credit',member_id:memberA,season_id:'20000000-0000-4000-8000-000000000002',title:'Groep van vorig seizoen',points:12,group_id:memberGroupB,definition_id:null},{id:'other-group-credit',member_id:memberB,season_id:season,title:'Groep van ander lid',points:8,group_id:memberGroupA,definition_id:null}];
+ await page.goto(base+'/');const ownGroups=page.getByRole('region',{name:'Mijn functiegroepen',exact:true});
+ await ownGroups.getByText('Wedstrijdcommissie',{exact:true}).waitFor();await ownGroups.getByText('Barcommissie',{exact:true}).waitFor();
+ await ownGroups.getByText('3,5 punten',{exact:true}).first().waitFor();await ownGroups.getByText('0 punten',{exact:true}).waitFor();
+ assert.equal(await ownGroups.getByText('Groep van vorig seizoen',{exact:true}).count(),0);assert.equal(await ownGroups.getByText('Losse functie',{exact:true}).count(),0);assert.equal(await ownGroups.getByText('Groep van ander lid',{exact:true}).count(),0);
+ assert.equal(await page.getByRole('progressbar',{name:'Behaalde punten'}).getAttribute('aria-valuenow'),'5.5');
+ assert.equal(await ownGroups.getByRole('button').count(),0);
+ if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/mijn-functiegroepen-${width}.png`,fullPage:true});}
+ testAwards=[];await page.reload();await ownGroups.getByText('Je bent dit seizoen niet ingedeeld in een functiegroep.',{exact:true}).waitFor();testAwards=memberGroupsBefore;
+ await page.setViewportSize({width:1280,height:950});
  console.log('Functies en functiegroepen geslaagd: aanmaken/bewerken, groepsleden zoeken en selecteren, vaste seizoenpunten, beide soorten toewijzen via Functies en Leden, intrekken, geen dubbele toekenningen, puntenoverzicht en migratieterugval. Alleen lokale testgegevens.');
  const screenshots=process.env.SCREENSHOT_DIR;
  if(screenshots) await mkdir(screenshots,{recursive:true});
