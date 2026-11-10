@@ -10,7 +10,7 @@ export type Team = { id: string; name: string; age_class: string; competition_le
 export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;postal_code?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number;assigned_team_id?:string|null}[] };
 export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string; definition_id?:string|null; group_id?:string|null };
-export type DataView = 'dashboard' | 'duties' | 'team' | 'management' | 'report' | 'matches' | 'settings' | 'notifications' | 'profile';
+export type DataView = 'dashboard' | 'duties' | 'team' | 'teams' | 'management' | 'report' | 'matches' | 'settings' | 'notifications' | 'profile';
 // React cache is request-scoped: never share member data across users or requests.
 export const getData = cache(async (view: DataView = 'dashboard') => {
   if (!configured()) redirect('/login?error=' + encodeURIComponent('De applicatie is nog niet ingesteld. Neem contact op met de beheerder.'));
@@ -27,11 +27,11 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
   const profile = profileResult.data as Profile | null;
   if (profileResult.error || !profile) throw new Error('Je account heeft nog geen ledenprofiel. Neem contact op met de beheerder.');
   if (seasonResult.error) throw new Error('Het actieve seizoen kon niet worden geladen. Controleer de database-inrichting.');
-  if ((view === 'management' || view === 'report' || view === 'settings') && profile.role === 'member') redirect('/');
+  if ((view === 'management' || view === 'report' || view === 'settings' || view === 'teams') && profile.role === 'member') redirect('/');
   const season = seasonResult.data as Season | null;
   const seasonId = season?.id ?? '00000000-0000-0000-0000-000000000000';
-  const teamView = ['team', 'management', 'report'].includes(view);
-  const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications' && view !== 'profile';
+  const teamView = ['team', 'teams', 'management', 'report'].includes(view);
+  const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications' && view !== 'profile' && view !== 'teams';
   const needAssignments = ['dashboard', 'team', 'management', 'report'].includes(view);
   const empty = Promise.resolve({ data: [], error: null });
   let enrollmentQuery = db.from('enrollments').select('*, duties!inner(season_id)').eq('duties.season_id', seasonId);
@@ -46,8 +46,8 @@ export const getData = cache(async (view: DataView = 'dashboard') => {
     needDuties ? db.from('duties').select('*').eq('season_id', seasonId).order('starts_at') : empty,
     needDuties ? enrollmentQuery : empty,
     db.from('teams').select('*').eq('season_id', seasonId),
-    membershipQuery,
-    teamView ? db.from('profiles').select('*').order('last_name') : Promise.resolve({ data: [profile], error: null }),
+    view==='teams'?collectPages<Membership>(async(from,to)=>{const r=await db.from('memberships').select('*',{count:'exact'}).eq('season_id',seasonId).order('member_id').range(from,to);return {data:r.data as Membership[]|null,count:r.count,error:r.error};}):membershipQuery,
+    view==='teams'?collectPages<Profile>(async(from,to)=>{const r=await db.from('profiles').select('*',{count:'exact'}).order('last_name').order('id').range(from,to);return {data:r.data as Profile[]|null,count:r.count,error:r.error};}):teamView ? db.from('profiles').select('*').order('last_name') : Promise.resolve({ data: [profile], error: null }),
     needAssignments ? collectPages<Assignment>(async(from,to)=>{const r=await assignmentQuery.range(from,to);return {data:r.data as Assignment[]|null,count:r.count,error:r.error};}).catch(()=>{throw new Error('Functietoekenningen konden niet volledig worden opgehaald. Probeer opnieuw.');}) : empty,
     view === 'matches' ? collectPages<Match>(async(from,to)=>{const r=await db.from('matches').select('*, referee_duties:duties(id,kind,cancelled,points,assigned_team_id)',{count:'exact'}).eq('season_id',seasonId).order('starts_at',{nullsFirst:false}).order('id').range(from,to);return {data:r.data as Match[]|null,count:r.count,error:r.error};}) : empty,
     needDuties && view !== 'report' ? db.rpc('duty_availability') : empty,

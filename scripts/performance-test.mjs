@@ -289,7 +289,7 @@ try {
  assert.equal(await page.getByRole('button',{name:/Inloggen/}).isDisabled(),true);
  await page.waitForURL(base+'/');await page.getByText('Anna Test',{exact:true}).first().waitFor();
  // A member gets only own information; completed services remain accessible.
- assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link').allTextContents(),['Mijn overzicht','Open diensten','Mijn diensten','Mijn profiel']);
+ assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link').allTextContents(),['Mijn overzicht','Diensten','Mijn diensten','Mijn profiel']);
  const pastId='50000000-0000-4000-8000-000000000002',foreignId='50000000-0000-4000-8000-000000000003';
  extraDuties=[{...testDuty,id:pastId,title:'Eigen afgelopen testdienst',starts_at:new Date(Date.now()-3*86400000).toISOString(),ends_at:new Date(Date.now()-3*86400000+7200000).toISOString(),points:3},{...testDuty,id:foreignId,title:'Dienst van ander lid',starts_at:new Date(Date.now()-4*86400000).toISOString(),ends_at:new Date(Date.now()-4*86400000+7200000).toISOString()}];
  extraEnrollments=[{id:'86000000-0000-4000-8000-000000000002',member_id:memberA,duty_id:pastId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false},{id:'86000000-0000-4000-8000-000000000003',member_id:memberB,duty_id:foreignId,created_at:new Date(Date.now()-5*86400000).toISOString(),revoked:false,offered:false}];
@@ -368,7 +368,7 @@ try {
  // Hold the actual navigation response to verify feedback before it arrives.
  let release;const gate=new Promise(resolve=>{release=resolve;});
  await page.route('**/diensten?*',async route=>{await gate;await route.continue();});
- await page.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link',{name:'Open diensten',exact:true}).click();
+ await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link',{name:'Diensten',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Pagina laden'}).first().waitFor({timeout:1000});
  release();await page.waitForURL('**/diensten');await page.getByRole('heading',{name:'Open diensten',exact:true}).waitFor();
  await page.goto(base+'/wedstrijden');await page.getByRole('heading',{name:'Wedstrijden',exact:true}).waitFor();
@@ -528,6 +528,21 @@ try {
   assert.equal(authWrites.filter(r=>r.path.endsWith('/create_default_duty')).at(-1).body.p_title,'Eigen '+kind+' testdienst');
  }
  console.log('Beheeromgeving en dienstenmenu geslaagd: uitklappen, actieve groep/herladen, drie soortgebonden aanmaakpagina’s, eigen titel, juiste RPC-soort en terugkeer.');
+ // Managers open an active-season team roster; other teams stay outside it.
+ const rosterOtherTeam='30000000-0000-4000-8000-000000000088',rosterEmptyTeam='30000000-0000-4000-8000-000000000089',rosterTeamsBefore=[...testTeams];
+ testTeams=[...testTeams,{id:rosterOtherTeam,name:'Ander team',age_class:'senior',competition_level:null},{id:rosterEmptyTeam,name:'Leeg team',age_class:'senior',competition_level:null}];teamAssignments.set(admin,rosterOtherTeam);captainA=true;
+ await adminPage.goto(base+'/beheer/teams');await adminPage.getByRole('link',{name:'Leden van Testteam',exact:true}).click();await adminPage.waitForURL(url=>url.searchParams.get('team')===teamId);
+ const teamRoster=adminPage.getByRole('region',{name:'Teamleden',exact:true});await teamRoster.getByRole('link',{name:'Lid beheren: Bram Test',exact:true}).waitFor();
+ assert.equal(await teamRoster.locator('tbody tr').count(),2);assert.equal(await teamRoster.getByText('Alex Test',{exact:true}).count(),0);
+ await teamRoster.getByText('Aanvoerder',{exact:true}).waitFor();await teamRoster.getByRole('cell',{name:'bram@example.test',exact:true}).waitFor();await teamRoster.getByRole('cell',{name:'t/m Superdivisie (N1)',exact:true}).waitFor();
+ if(process.env.SCREENSHOT_DIR) for(const width of [390,1440]) {await adminPage.setViewportSize({width,height:950});assert.equal(await adminPage.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await adminPage.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamleden-beheer-${width}.png`,fullPage:true});}
+ await teamRoster.getByRole('link',{name:'Lid beheren: Bram Test',exact:true}).click();await adminPage.waitForURL(url=>url.pathname==='/beheer/leden'&&url.searchParams.get('member')===memberB);assert.equal(await adminPage.locator('#lidinstellen select[name=member_id]').inputValue(),memberB);
+ await adminPage.goto(base+'/beheer/teams?team='+rosterEmptyTeam);await adminPage.getByText('Dit team heeft nog geen leden in dit seizoen.',{exact:true}).waitFor();
+ await adminPage.goto(base+'/beheer/teams?team=00000000-0000-0000-0000-000000000099');await adminPage.getByText('Dit team is niet beschikbaar in het actieve seizoen.',{exact:true}).waitFor();assert.equal(await teamRoster.count(),0);
+ adminRole='manager';await adminPage.goto(base+'/beheer/teams?team='+teamId);await teamRoster.getByRole('link',{name:'Lid beheren: Bram Test',exact:true}).waitFor();adminRole='admin';
+ await page.goto(base+'/beheer/teams?team='+teamId);await page.waitForURL(base+'/');
+ teamAssignments.delete(admin);captainA=false;testTeams=rosterTeamsBefore;await adminPage.setViewportSize({width:1280,height:950});
+ console.log('Teamledenbeheer geslaagd: team openen, eigen seizoen/team, aanvoerder en bevoegdheid, lid beheren, leeg/onbekend team, managerrechten, ledenafscherming en mobiel.');
  // Season creation/editing must have separate identities and keep unsaved input
  // on a server rejection; activation is explicit and cancellable.
  await adminPage.getByRole('navigation',{name:'Beheernavigatie'}).getByRole('link',{name:'Seizoenen',exact:true}).click();
@@ -1055,7 +1070,7 @@ try {
  await adminPage.keyboard.press('Escape');
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
  await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).click();
- await adminPage.getByRole('navigation',{name:'Hoofdnavigatie'}).getByRole('link',{name:'Open diensten',exact:true}).click();
+ await adminPage.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link',{name:'Diensten',exact:true}).click();
  await adminPage.waitForURL('**/diensten');
  assert.equal(await adminPage.getByRole('button',{name:'Navigatiemenu openen'}).getAttribute('aria-expanded'),'false');
  await adminPage.setViewportSize({width:390,height:600});

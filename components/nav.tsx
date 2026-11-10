@@ -26,7 +26,7 @@ function workspaceLinks(adminMode:boolean,captain:boolean) {
   {href:'/beheer/rapportage',label:'Rapportage',icon:ChartNoAxesCombined},
   {href:'/beheer/seizoenen',label:'Seizoenen',icon:CalendarRange},
   {href:'/beheer/instellingen',label:'Instellingen',icon:SlidersHorizontal},
- ]:[{href:'/',label:'Mijn overzicht',icon:LayoutDashboard},{href:'/diensten',label:'Open diensten',icon:CalendarDays},{href:'/mijn-diensten',label:'Mijn diensten',icon:ListChecks},{href:'/profiel',label:'Mijn profiel',icon:UserRound},...(captain?[{href:'/team',label:'Mijn team',icon:Users}]:[])];
+ ]:[{href:'/',label:'Mijn overzicht',icon:LayoutDashboard},{href:'/diensten',label:'Diensten',icon:CalendarDays},{href:'/mijn-diensten',label:'Mijn diensten',icon:ListChecks},{href:'/profiel',label:'Mijn profiel',icon:UserRound},...(captain?[{href:'/team',label:'Mijn team',icon:Users}]:[])];
 }
 export function MobileNavLinks({management,captain}:{management:boolean;captain:boolean}) {
  const path=usePathname(),adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
