@@ -92,7 +92,7 @@ const mock=createServer(async(req,res)=>{
   const row={...JSON.parse(body),id:'83000000-0000-4000-8000-000000000001',match_id:null,read_at:null,created_at:new Date().toISOString()};
   additionalNotifications.push(row);return res.end(JSON.stringify(row));
  }
- if(url.pathname==='/rest/v1/rpc/mark_notification_read') {testNotification.read_at=new Date().toISOString();return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/mark_notification_read') {const input=JSON.parse(body),notification=[testNotification,...additionalNotifications].find(n=>n.id===input.p_notification);if(notification)notification.read_at=new Date().toISOString();return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_season') {
   const input=JSON.parse(body);
   if(seasonSaveFailure) {res.statusCode=400;return res.end(JSON.stringify({code:'P0001',message:'Er bestaat al een seizoen met deze naam.'}));}
@@ -415,6 +415,17 @@ try {
  await slotAdmin.close();delete testDuty.slot_team_ids;testDuty.capacity=2;testDuty.assigned_team_id=null;captainA=false;hideTestEnrollment=false;teamAssignments.clear();testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];extraEnrollments=[];await page.goto(base+'/');
  console.log('Teamplekken geslaagd: beheer per plek, meerdere plekken voor hetzelfde team, eigen aanvoerdersquota, voortgang en toegewezen namen, desktop/mobiel.');
  console.log('Ledenomgeving geslaagd: vier menuonderdelen, eigen profiel en historie, geen andermans diensten, alleen eigen aanvoerdersteam en bevoegde teamleden toewijzen. Alleen lokale testgegevens.');
+
+ // Captain notifications use the existing private inbox and a direct team action.
+ captainA=true;
+ const captainNotification={id:'84000000-0000-4000-8000-000000000001',member_id:memberA,team_id:teamId,match_id:null,title:'Nieuwe teamdienst toegewezen',body:'Voor Testteam zijn 2 plekken nieuw toegewezen aan Testdienst.',created_at:new Date().toISOString(),read_at:null};additionalNotifications.push(captainNotification);
+ await page.goto(base+'/meldingen');const captainNotice=page.locator('.notification-row').filter({has:page.getByRole('heading',{name:'Nieuwe teamdienst toegewezen Ongelezen',exact:true})});
+ await captainNotice.getByRole('link',{name:'Mijn team bekijken',exact:true}).waitFor();assert.equal(await captainNotice.getByRole('link',{name:'Mijn team bekijken',exact:true}).getAttribute('href'),'/team');assert.equal(await captainNotice.getByRole('link',{name:'Wedstrijd bekijken',exact:true}).count(),0);
+ if(process.env.SCREENSHOT_DIR)for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/aanvoerdersmelding-${width}.png`,fullPage:true});}
+ await page.setViewportSize({width:1280,height:950});await captainNotice.getByRole('button',{name:'Markeren als gelezen',exact:true}).click();await page.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();assert.ok(captainNotification.read_at);
+ await page.getByRole('link',{name:'Mijn team bekijken',exact:true}).click();await page.waitForURL(base+'/team');await page.getByRole('heading',{name:'Mijn team',exact:true}).waitFor();
+ additionalNotifications.splice(additionalNotifications.indexOf(captainNotification),1);captainA=false;await page.goto(base+'/');
+ console.log('Aanvoerdersmelding browser geslaagd: eigen inbox, Mijn team-link, gelezenstatus en 320/390/768/1440px.');
  // Hold the actual navigation response to verify feedback before it arrives.
  let release;const gate=new Promise(resolve=>{release=resolve;});
  await page.route('**/diensten?*',async route=>{await gate;await route.continue();});

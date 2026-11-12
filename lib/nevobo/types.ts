@@ -15,7 +15,7 @@ export const importedMatch = z.object({
 export type ImportedMatch=z.infer<typeof importedMatch>;
 export type MatchStatus=z.infer<typeof matchStatus>;
 export type FeedSnapshot={matches:ImportedMatch[];publishedAt:string|null;complete:boolean};
-export type Notification={id:string;title:string;body:string;created_at:string;read_at:string|null;match_id:string|null};
+export type Notification={team_id?:string|null;id:string;title:string;body:string;created_at:string;read_at:string|null;match_id:string|null};
 export const statusLabels:Record<MatchStatus,string>={scheduled:'Gepland',played:'Gespeeld',cancelled:'Afgelast',postponed:'Uitgesteld',missing:'Status niet bevestigd'};
 export function canRegisterForMatch(match:{status?:string;cancelled?:boolean;starts_at:string|null},now=new Date()) {
   return !match.cancelled && (match.status ?? 'scheduled')==='scheduled' && Boolean(match.starts_at && new Date(match.starts_at)>now);
