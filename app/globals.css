@@ -26,6 +26,8 @@
   --radius-lg: 14px;
   --sidebar-width: 216px;
   --page-gutter: clamp(16px, 2.5vw, 48px);
+  --mobile-header-height: 64px;
+  --mobile-nav-height: 65px;
 }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--text); background: var(--canvas); font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
@@ -726,4 +728,18 @@ h3 { font-size: 17px; }
   .section-heading { flex-wrap: wrap; gap: 8px; }
   .section-heading > a { font-size: 12px; min-height: 44px; display: inline-flex; align-items: center; }
   .login-panel { padding: 22px; }
+}
+
+/* Keep mobile chrome attached to the viewport, independently of page length. */
+@media (max-width: 768px) {
+  :root { scroll-padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top) + 16px); scroll-padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 16px); }
+  .app-shell .workspace { min-height: 100dvh; padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top)); }
+  .app-shell .topbar { position: fixed; inset: 0 0 auto; z-index: 30; height: calc(var(--mobile-header-height) + env(safe-area-inset-top)); min-height: calc(var(--mobile-header-height) + env(safe-area-inset-top)); padding-top: calc(var(--space-2) + env(safe-area-inset-top)); padding-bottom: var(--space-2); }
+  .app-shell .mobile-menu-trigger { top: calc(var(--space-2) + env(safe-area-inset-top)); }
+  .app-shell .workspace main { padding-bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + var(--space-5)); }
+  .app-shell .mobile-navigation { top: auto; right: 0; bottom: 0; left: 0; margin: 0; min-height: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
+  .mobile-nav-link { height: 56px; min-height: 56px; }
+  .sidebar { padding-top: calc(var(--mobile-header-height) + env(safe-area-inset-top)); }
+  .mobile-menu-close { top: calc(var(--space-2) + env(safe-area-inset-top)); }
+  .branding-savebar { bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
 }
