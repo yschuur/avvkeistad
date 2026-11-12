@@ -40,7 +40,7 @@ De defaults zijn applicatiekleuren, geen claim over een officiële clubhuisstijl
 
 Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 14px / 1,5; koppen Georgia/Times New Roman (lokaal), paginatitel 30px / 1,3, sectietitel 20px / 1,4, kaarttitel 17px. Tabel en labels 12px. Mobiel paginatitel 27px en sectietitel 19px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
 
-Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` 5px voor badges, `--radius` 8px voor bediening en `--radius-lg` 14px voor panelen, ledenkaarten en dialogen. Navigatielinks hebben 11px radius. Borders 1px. Zeer zachte schaduw op het ledenpuntenpaneel en dienstkaarten; een kleine schaduw op overlays. Sidebar 216px; hoofdinhoud maximaal 1100px. Bestaande mobiele navigatie, safe-area-ruimte en 48px touchbediening blijven behouden.
+Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` 5px voor badges, `--radius` 8px voor bediening en `--radius-lg` 14px voor panelen, ledenkaarten en dialogen. Navigatielinks hebben 11px radius. Borders 1px. Zeer zachte schaduw op het ledenpuntenpaneel en dienstkaarten; een kleine schaduw op overlays. Sidebar 216px; hoofdinhoud gebruikt de volledige beschikbare breedte naast de sidebar, zonder maximale paginabreedte. Horizontale paginamarges volgen `--page-gutter`: 16–48px via `clamp(16px, 2.5vw, 48px)`. Inloggen en foutmeldingen houden hun compacte leesbreedte. Bestaande mobiele navigatie, safe-area-ruimte en 48px touchbediening blijven behouden.
 
 ## Gedeelde componenten
 
@@ -59,6 +59,8 @@ Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `-
 - Huisstijl: verenigingsnaam, rasterlogo en drie onafhankelijke kleuren. Color picker en HEX-invoer delen één waarde; alleen `#RRGGBB` is geldig. Preview toont naam/logo, navigatie, knoppen, kaart en voortgang met dezelfde tokens als de applicatie. Wijzigingen blijven lokaal tot Opslaan. Standaardkleuren herstellen behoudt naam en logo; daarna expliciet opslaan. PNG/JPEG/WebP, maximaal 256 KB; de upload controleert ook maximaal 4096 × 4096 pixels. SVG en externe URL’s zijn niet toegestaan. De server en database controleren inhoud, omvang en beheerrechten.
 
 ## Responsive en toegankelijkheid
+
+Vanaf 1440px staan op Mijn overzicht het puntenpaneel en de functiegroepen naast elkaar in een 2:1-verhouding; de titel, planning en open diensten gebruiken de volle breedte. Onder 1440px stapelen deze panelen. Kaartroosters gebruiken automatisch het aantal kolommen dat past, formulieren en tabellen benutten de beschikbare breedte. De sidebar kan bij beperkte schermhoogte verticaal scrollen.
 
 Breakpoints: desktop >1024px; tablet 769–1024px; mobiel ≤768px. De mobiele onderbalk gebruikt iconen én tekstlabels. De menuknop linksboven blijft ook tijdens scrollen bereikbaar en opent de volledige navigatie, waaronder aanvoerdersfuncties en de beheerschakelaar. Het paneel schuift kort vanaf links in; bij prefers-reduced-motion vervalt de animatie. Formulieren schakelen op 768px naar één kolom, lijsten stapelen. Op 1024px verdwijnt de derde formulierkolom. Primaire touchbediening is 48px hoog; overige navigatie heeft minimaal 44px bereik. De onderbalk houdt rekening met safe-area-insets. Hoofdinhoud en ankers krijgen ruimte voor boven- en onderbalk.
 

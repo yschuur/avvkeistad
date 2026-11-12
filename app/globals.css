@@ -25,6 +25,7 @@
   --radius: 8px;
   --radius-lg: 14px;
   --sidebar-width: 216px;
+  --page-gutter: clamp(16px, 2.5vw, 48px);
 }
 * { box-sizing: border-box; }
 body { margin: 0; color: var(--text); background: var(--canvas); font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
@@ -67,7 +68,7 @@ small, .small, .field-help { font-size: 12px; }
 .topbar { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-4); padding: 0 var(--space-6); border-bottom: 1px solid var(--border); background: var(--surface); color: var(--text-muted); font-size: 11px; }
 .topbar a { display: inline-flex; gap: var(--space-2); align-items: center; }
 .topbar a:hover { color: var(--text); }
-main { max-width: 1440px; padding: var(--space-6); margin: auto; }
+main { max-width: none; padding: var(--space-6); margin: auto; }
 #main-content:focus { outline: none; }
 .page-heading { display: flex; justify-content: space-between; align-items: center; gap: var(--space-4); margin-bottom: var(--space-5); }
 .page-heading p { margin-top: var(--space-2); color: var(--text-muted); font-size: 12px; }
@@ -201,7 +202,7 @@ input[type=color] { width: 44px; height: 36px; flex-shrink: 0; padding: var(--sp
 .mobile-menu-trigger, .mobile-menu-close, .menu-backdrop { display: none; }
 .loading-spinner { display: inline-block; width: 14px; height: 14px; flex-shrink: 0; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; vertical-align: middle; }
 .page-loading { min-height: 100dvh; padding-left: var(--sidebar-width); }
-.loading-content { max-width: 1440px; margin: auto; padding: var(--space-6); }
+.loading-content { max-width: none; margin: auto; padding: var(--space-6); }
 .loading-label { display: flex; align-items: center; gap: var(--space-2); color: var(--text-muted); margin-bottom: var(--space-5); font-size: 12px; }
 .skeleton { background: var(--surface-hover); border-radius: var(--radius-sm); }
 .skeleton-heading { width: 180px; height: 24px; margin-bottom: var(--space-5); }
@@ -379,7 +380,7 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .preview-progress span:last-child { width: 25%; background: var(--secondary-text); }
 .preview-actions .button { cursor: default; }
 .mobile-menu-label { display: none; }
-.member-workspace main { max-width: 1120px; }
+
 .member-workspace .points-summary { padding: var(--space-5); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
 .member-workspace .stat-item dd { font-size: 28px; font-weight: 600; }
 .points-progress { margin-top: var(--space-5); }
@@ -687,7 +688,18 @@ h3 { font-size: 17px; }
 .nav-link { font-size: 13px; gap: 14px; padding: 10px 14px; border-radius: 11px; }
 .nav-link.active { border-left-color: transparent; }
 .topbar { background: var(--canvas); font-size: 13px; }
-main, .loading-content, .member-workspace main { max-width: 1100px; }
+.app-shell .workspace main, .loading-content { width: 100%; max-width: none; padding-inline: var(--page-gutter); }
+.app-shell .topbar { padding-right: var(--page-gutter); }
+.sidebar { overflow-y: auto; overscroll-behavior: contain; }
+.page-heading > div, .section-heading > *, .admin-grid > *, .branding-layout > *, .season-layout > * { min-width: 0; }
+.page-heading, .section-heading { flex-wrap: wrap; }
+@media (min-width: 769px) { .app-shell .topbar { padding-left: var(--page-gutter); } }
+@media (min-width: 1440px) {
+  .member-workspace main:has(> .member-function-groups) { display: grid; grid-template-columns: minmax(0, 2fr) minmax(320px, 1fr); gap: var(--space-5); align-items: start; }
+  .member-workspace main:has(> .member-function-groups) > * { grid-column: 1 / -1; margin-bottom: 0; min-width: 0; }
+  .member-workspace main:has(> .member-function-groups) > .points-summary { grid-column: 1; align-self: stretch; }
+  .member-workspace main:has(> .member-function-groups) > .member-function-groups { grid-column: 2; align-self: stretch; }
+}
 .page-heading { margin-bottom: 24px; }
 .button { padding: 8px 16px; font-size: 14px; font-weight: 600; }
 .section-heading > a, .section-heading > .muted { font-size: 13px; }
