@@ -743,3 +743,11 @@ h3 { font-size: 17px; }
   .mobile-menu-close { top: calc(var(--space-2) + env(safe-area-inset-top)); }
   .branding-savebar { bottom: calc(var(--mobile-nav-height) + env(safe-area-inset-bottom)); }
 }
+
+.slot-team-grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: var(--space-3); }
+.team-duty-block { margin-top: var(--space-4); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.team-slot-summary { margin: var(--space-3) 0; padding: var(--space-3); background: var(--accent-subtle); color: var(--accent-text); border-radius: var(--radius); }
+.team-slot-filled { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; padding: var(--space-3) 0; border-bottom: 1px solid var(--border); }
+.team-slot-filled .enrolled-label { margin-left: auto; }
+.team-slot-list .team-duty-assignment > .field-help { flex-basis: 100%; }
+@media(max-width:768px) { .slot-team-grid { grid-template-columns: minmax(0,1fr); } .team-duty-block { padding: var(--space-3); } }

@@ -1,3 +1,4 @@
+import type { DutySlot } from './duty-slots';
 import { planningMonth } from './planning';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
@@ -61,7 +62,7 @@ export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?
   if (results.slice(0,9).some(r => r.error)) throw new Error('Gegevens konden niet worden opgehaald. Controleer de migratie en toegangsrechten.');
   return { profile, season,
     duties: results[0].data as Duty[], enrollments: results[1].data as Enrollment[], teams: results[2].data as Team[],
-    memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[] }[], functions: results[8].data as FunctionDefinition[], unreadNotifications:results[9].error?null:(results[9] as {count?:number|null}).count ?? null, syncState:results[10].error?null:(results[10].data?.[0] as SyncState|undefined) ?? null };
+    memberships: results[3].data as Membership[], profiles: results[4].data as Profile[], assignments: results[5].data as Assignment[], matches: results[6].data as Match[], availability: results[7].data as { duty_id: string; occupied: number; offered_ids: string[]; slots?:DutySlot[] }[], functions: results[8].data as FunctionDefinition[], unreadNotifications:results[9].error?null:(results[9] as {count?:number|null}).count ?? null, syncState:results[10].error?null:(results[10].data?.[0] as SyncState|undefined) ?? null };
 });
 
 export type AppData = Awaited<ReturnType<typeof getData>>;

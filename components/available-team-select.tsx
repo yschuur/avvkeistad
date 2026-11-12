@@ -3,7 +3,7 @@ import { useEffect,useMemo,useRef,useState } from 'react';
 import { fromZonedTime } from 'date-fns-tz';
 import { createMatchAvailability,type AvailabilityMatch,type DutyWindow } from '@/lib/match-availability';
 import type { Team } from '@/lib/data';
-export function AvailableTeamSelect({id,teams,matches=[],duty,teamId,disabled=false}:{id:string;teams:Team[];matches?:AvailabilityMatch[];duty?:DutyWindow;teamId?:string|null;disabled?:boolean}) {
+export function AvailableTeamSelect({id,teams,matches=[],duty,teamId,disabled=false,name="team_id",label="Toewijzen aan team"}:{id:string;teams:Team[];matches?:AvailabilityMatch[];duty?:DutyWindow;teamId?:string|null;disabled?:boolean;name?:string;label?:string}) {
  const field=useRef<HTMLDivElement>(null),[selection,setSelection]=useState(teamId??''),[entered,setEntered]=useState<DutyWindow[]>([]);
  useEffect(()=>{
   if(duty)return;
@@ -21,5 +21,5 @@ export function AvailableTeamSelect({id,teams,matches=[],duty,teamId,disabled=fa
  },[duty]);
  const check=useMemo(()=>createMatchAvailability(matches),[matches]);
  const windows=duty?[duty]:entered;
- return <div ref={field} className="team-assignment-field"><label htmlFor={id}>Toewijzen aan team</label><input type="hidden" name="team_id" value={selection} disabled={disabled}/><select id={id} value={selection} onChange={e=>setSelection(e.target.value)} disabled={disabled}><option value="">Open voor alle teams</option>{teams.map(t=>{const reason=windows.map(window=>check(t.name,window)).find(Boolean);return <option key={t.id} value={t.id} disabled={Boolean(reason)}>{t.name}{reason?` — ${reason}`:''}</option>;})}</select></div>;
+ return <div ref={field} className="team-assignment-field"><label htmlFor={id}>{label}</label><input type="hidden" name={name} value={selection} disabled={disabled}/><select id={id} value={selection} onChange={e=>setSelection(e.target.value)} disabled={disabled}><option value="">Open voor alle teams</option>{teams.map(t=>{const reason=windows.map(window=>check(t.name,window)).find(Boolean);return <option key={t.id} value={t.id} disabled={Boolean(reason)}>{t.name}{reason?` — ${reason}`:''}</option>;})}</select></div>;
 }

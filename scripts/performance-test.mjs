@@ -110,7 +110,7 @@ const mock=createServer(async(req,res)=>{
  }
  if(url.pathname==='/rest/v1/rpc/captain_team_duty_count') {
   const actor=JSON.parse(Buffer.from((req.headers.authorization??'').split('.')[1]??'','base64url').toString()).sub;
-  return res.end(JSON.stringify(actor===memberA&&captainA?[testDuty,...extraDuties].filter(d=>d.assigned_team_id===(teamAssignments.get(memberA)??teamId)&&!d.cancelled&&!d.signup_closed&&new Date(d.starts_at)>new Date()&&extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length<d.capacity).length:0));
+  return res.end(JSON.stringify(actor===memberA&&captainA?[testDuty,...extraDuties].filter(d=>(d.slot_team_ids?d.slot_team_ids.some((team,i)=>team===(teamAssignments.get(memberA)??teamId)&&!extraEnrollments.some(e=>e.duty_id===d.id&&!e.revoked&&e.slot_number===i+1)):d.assigned_team_id===(teamAssignments.get(memberA)??teamId)&&extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length<d.capacity)&&!d.cancelled&&!d.signup_closed&&new Date(d.starts_at)>new Date()).length:0));
  }
  if(url.pathname==='/rest/v1/rpc/update_managed_duty') {const input=JSON.parse(body);const d=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);Object.assign(d,{title:input.p_title,location:input.p_location,starts_at:input.p_start,ends_at:input.p_end,capacity:input.p_capacity});return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/set_duty_qualification') {
@@ -138,6 +138,12 @@ const mock=createServer(async(req,res)=>{
  if(url.pathname==='/rest/v1/rpc/add_function_group_members') {const input=JSON.parse(body);for(const memberId of input.p_members) assignFunctionFixture(memberId,'group',input.p_group);return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/remove_function') {testAwards=testAwards.filter(a=>a.id!==JSON.parse(body).p_assignment);return res.end('null');}
  if(url.pathname==='/rest/v1/rpc/save_duty_settings') {refereePoints=JSON.parse(body).p_referee_points;return res.end('null');}
+ if(url.pathname==='/rest/v1/rpc/assign_duty_slots') {
+  const input=JSON.parse(body),d=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);d.slot_team_ids=input.p_teams;d.assigned_team_id=input.p_teams.every(t=>t===input.p_teams[0])?input.p_teams[0]:null;return res.end('null');
+ }
+ if(url.pathname==='/rest/v1/rpc/enroll_duty_slot') {
+  const input=JSON.parse(body);extraEnrollments.push({id:'86000000-0000-4000-8000-'+String(100+extraEnrollments.length).padStart(12,'0'),member_id:input.p_member??memberA,duty_id:input.p_duty,slot_number:input.p_slot,created_at:new Date().toISOString(),revoked:false,offered:false});return res.end('null');
+ }
  if(url.pathname==='/rest/v1/rpc/assign_duty_team') {
   const input=JSON.parse(body),duty=[testDuty,...extraDuties].find(d=>d.id===input.p_duty);if(duty) duty.assigned_team_id=input.p_team;
   for(const linked of testMatch.referee_duties) if(linked.id===input.p_duty) linked.assigned_team_id=input.p_team;
@@ -222,7 +228,10 @@ const mock=createServer(async(req,res)=>{
   result=[...ownBase,...extraEnrollments].filter(e=>(!member||e.member_id===member)&&allDutyRows.some(d=>d.id===e.duty_id&&inWindow(d,'duties.')));
  }
  if(url.pathname==='/rest/v1/rpc/duty_participants') result=[...(!hideTestEnrollment?[{duty_id:testDuty.id,member_id:memberA}]:[]),...extraEnrollments].filter(e=>!e.revoked).map(e=>({duty_id:e.duty_id,first_name:profile(e.member_id).first_name,last_name:profile(e.member_id).last_name}));
- if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))];
+ if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))].map(a=>{
+  const d=[testDuty,...extraDuties].find(d=>d.id===a.duty_id);if(!('slot_team_ids' in d))return a;
+  const active=extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked);return {...a,occupied:active.length,slots:(d.slot_team_ids??Array(d.capacity).fill(d.assigned_team_id)).map((t,i)=>({slot:i+1,team_id:t,occupied:active.some(e=>e.slot_number===i+1),offered_id:null}))};
+ });
  if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
   result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):url.searchParams.has('id')?[profile(id)]:[profile(memberA),profile(memberB),profile(admin)];
@@ -387,6 +396,24 @@ try {
  await page.getByText('Geen openstaande teamdiensten.',{exact:true}).waitFor();assert.equal(await page.locator('.team-duty-count').count(),0);
  captainA=false;teamAssignments.clear();testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];extraDuties=[];extraEnrollments=[];
  await page.goto(base+'/');await page.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();
+
+ // Three places: the manager reserves two for A, one for B; A's captain fills only A's places.
+ captainA=true;hideTestEnrollment=true;testDuty.capacity=3;testDuty.slot_team_ids=null;
+ testTeams=[{id:teamId,name:'Eigen testteam',age_class:'senior',competition_level:null},{id:otherTeam,name:'Ander testteam',age_class:'senior',competition_level:null}];teamAssignments.set(admin,otherTeam);
+ const slotAdmin=await browser.newPage();await slotAdmin.goto(base+'/login');await slotAdmin.getByLabel('E-mailadres').fill('admin@example.test');await slotAdmin.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');await slotAdmin.getByRole('button',{name:'Inloggen',exact:true}).click();await slotAdmin.waitForURL(base+'/');
+ await slotAdmin.goto(base+'/beheer/planning?month='+testDuty.starts_at.slice(0,7)+'&duty='+testDuty.id);
+ const slotForm=slotAdmin.getByRole('button',{name:'Team opslaan',exact:true}).locator('xpath=ancestor::form');
+ await slotForm.getByLabel('Plek 1',{exact:true}).selectOption(teamId);await slotForm.getByLabel('Plek 2',{exact:true}).selectOption(teamId);await slotForm.getByLabel('Plek 3',{exact:true}).selectOption(otherTeam);
+ await slotForm.getByRole('button',{name:'Team opslaan',exact:true}).click();await slotAdmin.getByRole('status').filter({hasText:/^Opgeslagen$/}).waitFor();
+ assert.deepEqual(authWrites.filter(r=>r.path.endsWith('/assign_duty_slots')).at(-1).body.p_teams,[teamId,teamId,otherTeam]);
+ await page.goto(base+'/team');await page.getByText('2 plekken nog toe te wijzen',{exact:true}).waitFor();assert.equal(await page.locator('.team-slot-list form').count(),2);assert.equal(await page.getByLabel('Teamlid voor plek 3',{exact:true}).count(),0);
+ if(process.env.SCREENSHOT_DIR)for(const width of [390,1440]){await page.setViewportSize({width,height:950});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/teamplekken-${width}.png`,fullPage:true});}
+ await page.setViewportSize({width:1280,height:950});const firstSlot=page.getByLabel('Teamlid voor plek 1',{exact:true});await firstSlot.selectOption(memberB);await firstSlot.locator('xpath=ancestor::form').getByRole('button',{name:'Toewijzen',exact:true}).click();
+ await page.getByText('1 plek nog toe te wijzen',{exact:true}).waitFor();assert.match(await page.locator('.team-slot-summary').textContent(),/2 plekken.*1 ingevuld.*1 open/);await page.locator('.team-slot-filled').getByText('Bram Test',{exact:true}).waitFor();
+ const secondSlot=page.getByLabel('Teamlid voor plek 2',{exact:true});assert.equal(await secondSlot.locator(`option[value="${memberB}"]`).isDisabled(),true);await secondSlot.selectOption(memberA);await secondSlot.locator('xpath=ancestor::form').getByRole('button',{name:'Toewijzen',exact:true}).click();
+ await page.getByText('Geen openstaande teamdiensten.',{exact:true}).waitFor();assert.equal(await page.locator('.team-duty-count').count(),0);assert.deepEqual(extraEnrollments.map(e=>e.slot_number),[1,2]);assert.deepEqual(testDuty.slot_team_ids,[teamId,teamId,otherTeam]);
+ await slotAdmin.close();delete testDuty.slot_team_ids;testDuty.capacity=2;testDuty.assigned_team_id=null;captainA=false;hideTestEnrollment=false;teamAssignments.clear();testTeams=[{id:teamId,name:'Testteam',age_class:'senior',competition_level:null}];extraEnrollments=[];await page.goto(base+'/');
+ console.log('Teamplekken geslaagd: beheer per plek, meerdere plekken voor hetzelfde team, eigen aanvoerdersquota, voortgang en toegewezen namen, desktop/mobiel.');
  console.log('Ledenomgeving geslaagd: vier menuonderdelen, eigen profiel en historie, geen andermans diensten, alleen eigen aanvoerdersteam en bevoegde teamleden toewijzen. Alleen lokale testgegevens.');
  // Hold the actual navigation response to verify feedback before it arrives.
  let release;const gate=new Promise(resolve=>{release=resolve;});
@@ -1282,7 +1309,7 @@ try {
  for(const width of [320,390,768,1440]){await page.setViewportSize({width,height:950});await page.goto(base+'/beheer/planning?month='+at(0).slice(0,7));await openPlanningDuty(page);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/wedstrijdcontrole-${width}.png`,fullPage:true});}
  // Captains follow exactly the same rule, with only the short reason in the option.
  captainA=true;testDuty.assigned_team_id=teamId;const captainPage=await browser.newPage();await captainPage.goto(base+'/login');await captainPage.getByLabel('E-mailadres').fill('anna@example.test');await captainPage.getByLabel('Wachtwoord',{exact:true}).fill(passwords.get('anna@example.test'));await captainPage.getByRole('button',{name:'Inloggen',exact:true}).click();await captainPage.waitForURL(base+'/');await captainPage.goto(base+'/team');
- const captainSelect=captainPage.getByLabel('Teamlid toewijzen',{exact:true});assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).textContent(),'Anna Test — Eigen thuiswedstrijd');assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).isDisabled(),true);assert.equal(await captainPage.locator('.team-duty-blocked').count(),0);await captainPage.close();
+ const captainSelect=captainPage.getByLabel(/Teamlid (toewijzen|voor plek)/).first();assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).textContent(),'Anna Test — Eigen thuiswedstrijd');assert.equal(await captainSelect.locator(`option[value="${memberA}"]`).isDisabled(),true);assert.equal(await captainPage.locator('.team-duty-blocked').count(),0);await captainPage.close();
  console.log('Wedstrijdcontrole browser geslaagd: thuis/uit, exacte tijdgrenzen, volledige dienst, grijze leden- en teamopties met korte reden, dynamische aanmaaktijden, aanvoerder en 320/390/768/1440px.');
 
  }

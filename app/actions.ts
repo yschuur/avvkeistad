@@ -71,7 +71,8 @@ export async function setPassword(f: FormData) {
 export async function enroll(f: FormData) {
   await run(dutyReturnPath(f), async () => {
     const db = await supabase();
-    const { error } = await db.rpc('enroll', { p_duty: id.parse(f.get('duty_id')), p_takeover: f.get('takeover_id') ? id.parse(f.get('takeover_id')) : null, p_member: f.get('member_id') ? id.parse(f.get('member_id')) : null });
+    const args={p_duty:id.parse(f.get('duty_id')),p_takeover:f.get('takeover_id')?id.parse(f.get('takeover_id')):null,p_member:f.get('member_id')?id.parse(f.get('member_id')):null};
+    const {error}=text(f,'slot_number')?await db.rpc('enroll_duty_slot',{...args,p_slot:z.coerce.number().int().min(1).max(100).parse(f.get('slot_number'))}):await db.rpc('enroll',args);
     if (error) throw new Error(error.message);
   });
 }
@@ -261,8 +262,9 @@ export async function updateTeamCompetition(f:FormData) {
 export async function assignDutyTeam(f:FormData) {
  const target=managementDutyPath(f);
  await run(target,async()=>{
-  const {db}=await manager();const {error}=await db.rpc('assign_duty_team',{p_duty:id.parse(f.get('duty_id')),p_team:text(f,'team_id')?id.parse(f.get('team_id')):null});
-  if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 008_team_duties_and_referee_defaults.sql uit om teams toe te wijzen.':error.message);
+  const {db}=await manager(),duty=id.parse(f.get('duty_id')),values=f.getAll('slot_team_id');
+  const {error}=values.length?await db.rpc('assign_duty_slots',{p_duty:duty,p_teams:z.array(id.nullable()).min(1).max(100).parse(values.map(v=>v?id.parse(v):null))}):await db.rpc('assign_duty_team',{p_duty:duty,p_team:text(f,'team_id')?id.parse(f.get('team_id')):null});
+  if(error) throw new Error(error.code==='PGRST202'?'Voer migratie 017_duty_team_slots.sql uit om teams per plek toe te wijzen.':error.message);
  });
 }
 export async function saveDutySettings(f:FormData) {

@@ -1,3 +1,4 @@
+import { canTakeDutySlot } from './duty-slots';
 import { keistadTeamKey } from './team-identity';
 import { createMatchAvailability } from './match-availability';
 import type { AppData } from './data';
@@ -12,10 +13,10 @@ export function openMemberDuties(data:AppData,now=new Date()) {
  const team=data.memberships.find(m=>m.member_id===data.profile.id)?.team_id;
  if(!team) return [];
  return data.duties.filter(d=>{
-  if(d.kind==='lines'||d.cancelled||d.signup_closed||new Date(d.starts_at)<=now||mine.some(e=>e.duty_id===d.id)||!meetsDutyQualification(data.profile,d)||d.assigned_team_id&&d.assigned_team_id!==team) return false;
+  if(d.kind==='lines'||d.cancelled||d.signup_closed||new Date(d.starts_at)<=now||mine.some(e=>e.duty_id===d.id)||!meetsDutyQualification(data.profile,d)) return false;
   if(mine.some(e=>data.duties.some(other=>other.id===e.duty_id&&!other.cancelled&&overlaps(d,other)))) return false;
   const availability=data.availability.find(a=>a.duty_id===d.id);
-  return (availability?.occupied ?? 0)<d.capacity||Boolean(availability?.offered_ids.length);
+  return canTakeDutySlot(d,team,availability,data.enrollments);
  });
 }
 export function listedMemberDuties(data:AppData,now=new Date()) {
