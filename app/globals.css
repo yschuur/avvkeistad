@@ -1,12 +1,12 @@
 :root {
-  --canvas: #fcfcfd;
-  --surface: #ffffff;
-  --surface-subtle: #f7f8fa;
-  --surface-hover: #eef0f3;
-  --border: #e3e5e9;
-  --border-strong: #c9cdd4;
-  --text: #24262d;
-  --text-muted: #656b76;
+  --canvas: #fcf6f1;
+  --surface: #fffaf6;
+  --surface-subtle: #faf0e8;
+  --surface-hover: #f2e7de;
+  --border: #e6d3c5;
+  --border-strong: #d4bbab;
+  --text: #321b12;
+  --text-muted: #69554a;
   --success: #24613f;
   --success-bg: #eff6f1;
   --danger: #a12b35;
@@ -21,13 +21,13 @@
   --space-5: 24px;
   --space-6: 32px;
   --radius-none: 0px;
-  --radius-sm: 2px;
-  --radius: 2px;
-  --radius-lg: 4px;
-  --sidebar-width: 224px;
+  --radius-sm: 5px;
+  --radius: 8px;
+  --radius-lg: 14px;
+  --sidebar-width: 216px;
 }
 * { box-sizing: border-box; }
-body { margin: 0; color: var(--text); background: var(--canvas); font: 13px/1.5 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
+body { margin: 0; color: var(--text); background: var(--canvas); font: 14px/1.5 Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; -webkit-font-smoothing: antialiased; }
 a { color: inherit; text-decoration: none; }
 button, input, select { font: inherit; }
 button, a, input, select { -webkit-tap-highlight-color: transparent; }
@@ -676,3 +676,42 @@ input[aria-invalid=true] { border-color: var(--danger); }
 .pagination-choice select {width:100%;}
 
 .team-assignment-field option:disabled,.managed-duty select option:disabled {color:var(--text-muted);}
+
+/* Reference styling: warm surfaces and serif headings; existing layouts and actions retained. */
+h1, h2, h3 { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; }
+h1 { font-size: 30px; letter-spacing: -.6px; }
+h2 { font-size: 20px; }
+h3 { font-size: 17px; }
+.brand { font-size: 15px; }
+.brand small, .season-label { font-size: 12px; }
+.nav-link { font-size: 13px; gap: 14px; padding: 10px 14px; border-radius: 11px; }
+.nav-link.active { border-left-color: transparent; }
+.topbar { background: var(--canvas); font-size: 13px; }
+main, .loading-content, .member-workspace main { max-width: 1100px; }
+.page-heading { margin-bottom: 24px; }
+.button { padding: 8px 16px; font-size: 14px; font-weight: 600; }
+.section-heading > a, .section-heading > .muted { font-size: 13px; }
+.member-workspace .points-summary { padding: 20px 26px; border-radius: var(--radius-lg); box-shadow: 0 6px 18px rgb(70 39 17 / .035); margin-bottom: 24px; }
+.stat-item dt { font-size: 13px; }
+.member-workspace .stat-item dd { font-size: 30px; margin-top: 2px; }
+.progress-legend { font-size: 12px; }
+.progress-legend i { width: 8px; height: 8px; border-radius: 2px; }
+.member-workspace .points-progress .progress-track { height: 9px; border-radius: 8px; }
+.list-section { margin-bottom: 26px; }
+.member-workspace .empty-state { border-radius: var(--radius-lg); padding: 16px; font-size: 13px; }
+.member-workspace .duty-card { border-radius: var(--radius-lg); box-shadow: 0 6px 16px rgb(70 39 17 / .045); }
+.member-workspace .duty-main h3 { font-size: 17px; font-weight: 700; }
+.member-workspace .duty-points strong { font-family: Georgia, 'Times New Roman', serif; font-size: 23px; font-weight: 700; }
+.panel { border-radius: var(--radius-lg); }
+.login-panel { padding: 28px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); }
+.login-panel > h1 { font-size: 28px; }
+@media (max-width: 768px) {
+  h1 { font-size: 27px; }
+  h2 { font-size: 19px; }
+  .page-heading .button { font-size: 13px; }
+  .member-workspace .points-summary { padding: 18px 16px; }
+  .member-workspace .stat-item dd { font-size: 28px; }
+  .section-heading { flex-wrap: wrap; gap: 8px; }
+  .section-heading > a { font-size: 12px; min-height: 44px; display: inline-flex; align-items: center; }
+  .login-panel { padding: 22px; }
+}

@@ -1,10 +1,10 @@
 # Vrijwilligersportaal — designsysteem
 
-Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting is Friendly Club Portal met de informatiedichtheid en rust van Linear. Leden krijgen toegankelijke kaarten; beheer krijgt compacte tabellen en formulieren.
+Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting volgt het aangeleverde referentiebeeld: warme crèmevlakken, donkerbruine serifkoppen, zachte randen en acties in de ingestelde clubkleur. Leden krijgen toegankelijke kaarten; beheer krijgt compacte tabellen en formulieren.
 
 ## Principes
 
-Functionaliteit boven decoratie. Compacte typografie, neutrale vlakken, dunne borders en een voorspelbare navigatie. Geen hero's, illustraties, slogans, gradients, glows, decoratieve iconen of opvallende schaduwen. Gebruik iconen alleen voor navigatie, bediening of een betekenisvolle status. Gebruik semantische HTML.
+Functionaliteit boven decoratie. Compacte typografie, neutrale vlakken, dunne borders en een voorspelbare navigatie. Geen hero's, illustraties, slogans, gradients, glows, decoratieve iconen of opvallende schaduwen. Zeer zachte schaduwen op puntenpaneel en ledenkaarten zijn toegestaan. Gebruik iconen alleen voor navigatie, bediening of een betekenisvolle status. Gebruik semantische HTML.
 
 ## Content
 
@@ -18,14 +18,14 @@ De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens 
 
 | Rol | Token | Waarde / bron |
 | --- | --- | --- |
-| Canvas | `--canvas` | #fcfcfd |
-| Oppervlak | `--surface` | #ffffff |
-| Sidebar / subtiel vlak | `--surface-subtle` | #f7f8fa |
-| Hover | `--surface-hover` | #eef0f3 |
-| Border | `--border` | #e3e5e9 |
-| Sterkere border | `--border-strong` | #c9cdd4 |
-| Primaire tekst | `--text` | #24262d |
-| Secundaire tekst | `--text-muted` | #656b76 |
+| Canvas | `--canvas` | #fcf6f1 |
+| Oppervlak | `--surface` | #fffaf6 |
+| Sidebar / subtiel vlak | `--surface-subtle` | #faf0e8 |
+| Hover | `--surface-hover` | #f2e7de |
+| Border | `--border` | #e6d3c5 |
+| Sterkere border | `--border-strong` | #d4bbab |
+| Primaire tekst | `--text` | #321b12 |
+| Secundaire tekst | `--text-muted` | #69554a |
 | Primaire clubkleur | `--brand-primary` | Database, standaard #087d56 uit de bestaande app |
 | Secundaire clubkleur | `--brand-secondary` | Database, standaard #6483b8 uit de bestaande app |
 | Accentkleur / primaire actie | `--brand-accent`, `--accent`, `--on-accent` | Onafhankelijk opgeslagen accent en automatisch zwart/wit met minimaal 4,5:1 contrast |
@@ -38,9 +38,9 @@ De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens 
 
 De defaults zijn applicatiekleuren, geen claim over een officiële clubhuisstijl. Achtergronden en basistekst blijven neutraal. De primaire kleur markeert actieve navigatie. De onafhankelijke accentkleur bepaalt primaire acties, focus en behaalde voortgang; de secundaire kleur onderscheidt ingeplande punten en de huisstijlpreview. Typebadges zijn neutraal: een diensttype is geen waarschuwing of successtatus.
 
-Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 13px / 1,5; paginatitel 22px / 1,3, sectietitel 14px / 1,4, tabel en labels 12px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
+Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 14px / 1,5; koppen Georgia/Times New Roman (lokaal), paginatitel 30px / 1,3, sectietitel 20px / 1,4, kaarttitel 17px. Tabel en labels 12px. Mobiel paginatitel 27px en sectietitel 19px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
 
-Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` en `--radius` 2px; `--radius-lg` 4px uitsluitend voor dialogen. Kaarten, panelen, badges, knoppen, velden, tabellen en navigatie gebruiken 2px. Geen pillvormen; alleen functionele spinners mogen rond zijn. Borders 1px. Geen schaduw op kaarten, tabellen of knoppen; uitsluitend een kleine schaduw op een overlay die boven inhoud ligt. Sidebar 224px; hoofdinhoud maximaal 1440px.
+Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` 5px voor badges, `--radius` 8px voor bediening en `--radius-lg` 14px voor panelen, ledenkaarten en dialogen. Navigatielinks hebben 11px radius. Borders 1px. Zeer zachte schaduw op het ledenpuntenpaneel en dienstkaarten; een kleine schaduw op overlays. Sidebar 216px; hoofdinhoud maximaal 1100px. Bestaande mobiele navigatie, safe-area-ruimte en 48px touchbediening blijven behouden.
 
 ## Gedeelde componenten
 
