@@ -334,7 +334,7 @@ try {
   for(const [path,topic] of topics) {
    await helpAdmin.goto(base+path,{waitUntil:'networkidle'});const initialUrl=helpAdmin.url(),writeCount=records.filter(r=>r.method==='POST').length;
    const trigger=helpAdmin.getByRole('button',{name:'Uitleg over '+topic,exact:true});await trigger.click();const dialog=helpAdmin.getByRole('dialog',{name:topic,exact:true});await dialog.waitFor();
-   assert.ok((await dialog.locator('.info-dialog-body').textContent()).length>100);assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
+   assert.ok((await dialog.locator('.info-dialog-body').textContent()).length>100);assert.ok(await dialog.locator('.admin-help h3').count()>=2);assert.ok(await dialog.locator('.admin-help li').count()>=4);assert.equal(await dialog.locator('.admin-help section').count(),await dialog.locator('.admin-help h3').count());assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
    const bounds=await dialog.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1);assert.ok(bounds.y>=0&&bounds.y+bounds.height<=901);
    await helpAdmin.keyboard.press('Tab');assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
    if(process.env.SCREENSHOT_DIR&&path==='/beheer/planning')await helpAdmin.screenshot({path:`${process.env.SCREENSHOT_DIR}/beheer-uitleg-${width}.png`});

@@ -1,12 +1,42 @@
-/** Context for existing management workflows; does not change permissions or rules. */
+export type AdminHelpSection = { title: string; steps?: boolean; items: readonly string[] };
+/** Instructions for existing workflows; does not change permissions or rules. */
 export const adminHelp = {
- overview: 'Begin bij het actieve seizoen: dit bepaalt welke teamindelingen, diensten en punten je beheert. Stel daarna teams en leden in en plan diensten. Bij Opvolgen vind je leden zonder team, vrije plaatsen en puntentekorten. Gebruik Rapportage om de puntenadministratie te controleren.',
- members: 'Kies Instellen bij een lid om de teamindeling voor het actieve seizoen te beheren. Een lege persoonlijke norm gebruikt de standaardnorm; 0 betekent een norm van nul punten. Aanvoerder geeft het lid toegang tot het beheren van de gereserveerde plekken van dit team en verandert de accountrol niet. Het scheidsrechtersniveau bepaalt welke fluitdiensten het lid mag aannemen. Functiepunten ken je apart toe via Functie toewijzen.',
- teams: 'De leeftijdsklasse van een team bepaalt welke seizoensnorm standaard geldt voor de leden. Het competitieniveau bepaalt het vereiste scheidsrechtersniveau bij wedstrijdfluitdiensten. Dit is iets anders dan het persoonlijke scheidsrechtersniveau van een lid. Via de ledenlijst kun je de teamindeling en aanvoerder instellen.',
- duties: 'Open Dienst beheren om teams of leden toe te wijzen. Een team reserveren plant nog geen persoon in: de aanvoerder vult de eigen gereserveerde plekken in, of je wijst zelf een lid toe. Elke plek kan een eigen team krijgen; hetzelfde team kan meerdere plekken hebben. Een open plek is beschikbaar voor leden die aan de inschrijfregels voldoen. Grijze keuzes tonen waarom toewijzen niet kan, bijvoorbeeld een overlappende dienst, eigen wedstrijd, reistijd of onvoldoende scheidsrechtersniveau. Het Teamfilter kijkt hier naar gereserveerde teams.',
- functions: 'Maak eerst een functie met vaste seizoenspunten aan en wijs deze daarna toe aan een lid. De toekenning telt mee bij Behaald in dit seizoen. Punten wijzigen bij een functie werkt door naar alle gekoppelde toekenningen in dit seizoen. Een toekenning intrekken verwijdert de bijbehorende punten, niet het lid of diens dienstinschrijvingen.',
- groups: 'Een functiegroep is bedoeld om dezelfde vaste seizoenspunten aan meerdere leden toe te kennen. Maak de groep aan, kies Beheren en voeg leden toe. Ieder gekoppeld lid ontvangt de ingestelde punten; dit is geen teambudget dat wordt verdeeld. Punten wijzigen werkt door naar de gekoppelde toekenningen. Een lid uit de groep verwijderen trekt alleen die toekenning in.',
- seasons: 'Nieuw seizoen maakt een afzonderlijke administratie aan. Controleer de periode en puntennormen voordat je het seizoen activeert. Activeren laat de overzichten en Nevobo-import dit seizoen gebruiken; bestaande gegevens blijven bij hun eigen seizoen. Controleer na het wisselen de teamindelingen en planning voor het actieve seizoen.',
- reports: 'Behaald telt geldige afgelopen diensten en toegekende functie- en functiegroeppunten. Ingepland telt diensten die nog niet zijn afgelopen. Nog te behalen is de norm min Behaald; ingeplande punten zijn daar nog niet van afgetrokken. Een lid met genoeg ingeplande diensten kan daardoor nog een tekort tonen. Filters en exports zijn bedoeld om deze administratie te controleren.',
- matches: 'Nu synchroniseren haalt het actuele wedstrijdprogramma uit Nevobo op. Controleer wijzigingen via Wijzigingslog. Maak wedstrijdfluitdiensten hier aan: het vereiste niveau wordt uit het competitieniveau afgeleid. Wedstrijdvelden van gekoppelde diensten volgen Nevobo en zijn niet handmatig te wijzigen. Teams reserveren en leden inplannen beheer je vervolgens bij de dienst.',
-} as const;
+ overview: [
+  {title:'Zo begin je',steps:true,items:['Controleer welk seizoen actief is. Dit bepaalt welke teamindelingen, diensten en punten je beheert.','Stel de teams en leden in.','Maak diensten aan en wijs teams of leden toe.']},
+  {title:'Houd de administratie bij',items:['Bij Opvolgen zie je leden zonder team, vrije plaatsen en puntentekorten.','Gebruik Rapportage om de punten per lid te controleren.']},
+ ],
+ members: [
+  {title:'Een lid instellen',steps:true,items:['Kies Instellen bij het lid.','Kies het team voor het actieve seizoen en controleer de instellingen.','Klik op Lidinstellingen opslaan.']},
+  {title:'Wat betekenen de instellingen?',items:['Persoonlijke norm: leeg gebruikt de standaardnorm. Vul 0 in als het lid nul punten hoeft te behalen.','Aanvoerder: het lid kan de gereserveerde plekken van dit team invullen. De accountrol verandert niet.','Scheidsrechtersniveau: bepaalt welke fluitdiensten het lid mag aannemen.']},
+  {title:'Functiepunten toevoegen',items:['Gebruik Functie toewijzen om apart punten voor een functie of functiegroep toe te kennen.']},
+ ],
+ teams: [
+  {title:'Een team instellen',steps:true,items:['Vul de teamnaam in en kies de leeftijdsklasse.','Stel het competitieniveau in en sla het team op.','Stel via de ledenlijst de teamindeling en aanvoerder in.']},
+  {title:'Twee verschillende instellingen',items:['Leeftijdsklasse: bepaalt welke seizoensnorm standaard geldt voor de leden.','Competitieniveau: bepaalt het vereiste scheidsrechtersniveau bij wedstrijdfluitdiensten.','Het persoonlijke scheidsrechtersniveau van een lid stel je bij Leden in.']},
+ ],
+ duties: [
+  {title:'Een dienst invullen',steps:true,items:['Open Dienst beheren bij de gewenste dienst.','Reserveer plekken voor een team, of wijs zelf een geschikt lid toe.','Bij een teamreservering vult de aanvoerder de eigen plekken in. Er is pas iemand ingepland als een lid is toegewezen of ingeschreven.']},
+  {title:'Zo werken de plekken',items:['Elke plek kan een eigen team krijgen. Hetzelfde team kan meerdere plekken krijgen.','Een open plek is beschikbaar voor leden die aan de inschrijfregels voldoen.','Het Teamfilter toont diensten met plekken die voor het gekozen team zijn gereserveerd.']},
+  {title:'Waarom is een keuze grijs?',items:['De reden staat bij de keuze, bijvoorbeeld een overlappende dienst, eigen wedstrijd, reistijd of onvoldoende scheidsrechtersniveau.']},
+ ],
+ functions: [
+  {title:'Functiepunten toekennen',steps:true,items:['Maak een functie aan met vaste punten voor het seizoen.','Wijs de functie toe aan een lid.','De toegekende punten tellen mee bij Behaald in dit seizoen.']},
+  {title:'Let op bij aanpassen',items:['De punten van een functie wijzigen werkt door naar alle gekoppelde toekenningen in dit seizoen.','Een toekenning intrekken laat de bijbehorende punten vervallen. Het lid en diens dienstinschrijvingen blijven behouden.']},
+ ],
+ groups: [
+  {title:'Meerdere leden dezelfde punten geven',steps:true,items:['Maak een functiegroep aan en stel de vaste punten per lid in.','Kies Beheren bij de groep.','Voeg de leden toe die deze punten moeten ontvangen.']},
+  {title:'Zo worden de punten verwerkt',items:['Ieder gekoppeld lid ontvangt het volledige ingestelde puntenaantal.','Punten wijzigen bij de groep werkt door naar de gekoppelde toekenningen.','Een lid uit de groep verwijderen trekt alleen de toekenning van deze groep in.']},
+ ],
+ seasons: [
+  {title:'Een seizoen voorbereiden',steps:true,items:['Kies Nieuw seizoen om een afzonderlijke administratie aan te maken.','Controleer de periode en puntennormen en sla het seizoen op.','Activeer het seizoen wanneer je daarmee wilt gaan werken.']},
+  {title:'Wat doet Activeren?',items:['Overzichten en Nevobo-import gebruiken daarna dit seizoen.','Bestaande gegevens blijven bij hun eigen seizoen.','Controleer na het wisselen de teamindelingen en planning van het actieve seizoen.']},
+ ],
+ reports: [
+  {title:'Wat betekenen de kolommen?',items:['Behaald: punten uit geldige afgelopen diensten en toegekende functie- en functiegroeppunten.','Ingepland: punten voor diensten die nog niet zijn afgelopen.','Nog te behalen: de norm min Behaald. Ingeplande punten zijn hier nog niet van afgetrokken.']},
+  {title:'Een tekort controleren',steps:true,items:['Filter op een team of op leden onder de norm.','Bekijk ook Ingepland: een lid kan al genoeg diensten gepland hebben en toch nog een tekort tonen.','Gebruik CSV exporteren als je het overzicht buiten de tool wilt bekijken.']},
+ ],
+ matches: [
+  {title:'Wedstrijdfluitdiensten beheren',steps:true,items:['Kies Nu synchroniseren om het actuele wedstrijdprogramma uit Nevobo op te halen.','Controleer wijzigingen via Wijzigingslog.','Maak de fluitdiensten bij de wedstrijden aan. Het vereiste scheidsrechtersniveau volgt uit het competitieniveau.','Reserveer teams of plan leden in bij de dienst.']},
+  {title:'Welke gegevens kun je wijzigen?',items:['Wedstrijdvelden van gekoppelde diensten volgen Nevobo en zijn niet handmatig te wijzigen.','Teamreserveringen en lidtoewijzingen beheer je bij de dienst.']},
+ ],
+} satisfies Record<string, readonly AdminHelpSection[]>;

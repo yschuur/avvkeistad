@@ -1,5 +1,5 @@
 import { InfoButton } from '@/components/info-button';
-import { adminHelp } from '@/lib/admin-help';
+import { AdminHelp } from '@/components/admin-help';
 import { TableCell } from '@/components/responsive-table';
 import Link from 'next/link';
 import { getData } from '@/lib/data';
@@ -21,7 +21,7 @@ export default async function SeasonsPage({searchParams}:{searchParams:Promise<R
  const unknown=Boolean(params.season && !seasons.some(s=>s.id===params.season));
  return <Shell data={data}>
   <div className="breadcrumbs"><Link href="/beheer">Beheer</Link><span>/</span><span>Seizoenen</span></div>
-  <Heading help={<InfoButton topic="Seizoenen beheren">{adminHelp.seasons}</InfoButton>} title="Seizoenen"><Link className="button" href="/beheer/seizoenen?new=1#seizoenformulier">Nieuw seizoen</Link></Heading>
+  <Heading help={<InfoButton topic="Seizoenen beheren"><AdminHelp topic="seasons"/></InfoButton>} title="Seizoenen"><Link className="button" href="/beheer/seizoenen?new=1#seizoenformulier">Nieuw seizoen</Link></Heading>
   <Notice params={params}/>
   {result.error?<p className="notice warning" role="alert">{result.error.code==='42703'||result.error.code==='PGRST204'?'Voer eerst migratie 004_season_management.sql uit in Supabase om seizoenen te kunnen aanmaken en bewerken.':'De seizoenen konden niet worden geladen. Herlaad de pagina of controleer de databaseverbinding.'}</p>:<>
    {unknown && <p className="notice warning" role="alert">Het gekozen seizoen bestaat niet meer. Selecteer een seizoen uit het overzicht.</p>}
