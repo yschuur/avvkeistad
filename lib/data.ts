@@ -13,8 +13,8 @@ export type Match = { id:string;home_team:string;away_team:string;starts_at:stri
 export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string; definition_id?:string|null; group_id?:string|null };
 export type DataView = 'dashboard' | 'members' | 'duties' | 'team' | 'teams' | 'management' | 'report' | 'matches' | 'managed-matches' | 'planning' | 'settings' | 'notifications' | 'profile';
-// React cache is request-scoped: never share member data across users or requests.
-export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?:string,loadDutyMatches=false) => {
+// Identity and context are memoized only within the current server request.
+export const getIdentity=cache(async()=>{
   if (!configured()) redirect('/login?error=' + encodeURIComponent('De applicatie is nog niet ingesteld. Neem contact op met de beheerder.'));
   const db = await supabase();
   // Verifies signature and expiry locally with cached public keys on asymmetric
@@ -29,8 +29,12 @@ export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?
   const profile = profileResult.data as Profile | null;
   if (profileResult.error || !profile) throw new Error('Je account heeft nog geen ledenprofiel. Neem contact op met de beheerder.');
   if (seasonResult.error) throw new Error('Het actieve seizoen kon niet worden geladen. Controleer de database-inrichting.');
+  return {profile,season:seasonResult.data as Season|null};
+});
+// React cache is request-scoped: never share member data across users or requests.
+export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?:string,loadDutyMatches=false) => {
+  const {profile,season}=await getIdentity(),db=await supabase(),memberId=profile.id;
   if ((view === 'management' || view === 'members' || view === 'report' || view === 'settings' || view === 'teams' || view === 'managed-matches' || view==='planning') && profile.role === 'member') redirect('/');
-  const season = seasonResult.data as Season | null;
   const seasonId = season?.id ?? '00000000-0000-0000-0000-000000000000';
   const teamView = ['team', 'teams', 'management', 'report','managed-matches','planning'].includes(view);
   const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications' && view !== 'profile' && view !== 'teams' && view !== 'members';
@@ -80,7 +84,7 @@ export function memberProgress(data: AppData, memberId: string) {
   const membership = data.memberships.find(m => m.member_id === memberId);
   const team = data.teams.find(t => t.id === membership?.team_id);
   const s = data.season;
-  const norm = membership?.norm_override ?? (team?.age_class === 'youth' ? s?.youth_norm : s?.senior_norm) ?? s?.default_norm ?? 0;
+  const norm = membership?.norm_override ?? ((team?.age_class === 'youth'||team?.age_class === 'mini') ? s?.youth_norm : s?.senior_norm) ?? s?.default_norm ?? 0;
   const owned = data.enrollments.filter(e => e.member_id === memberId && !e.revoked);
   let earned = data.assignments.filter(a => a.member_id === memberId).reduce((n, a) => n + Number(a.points), 0), planned = 0;
   for (const e of owned) {

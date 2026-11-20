@@ -26,12 +26,12 @@ function workspaceLinks(adminMode:boolean,captain:boolean) {
   {href:'/beheer/rapportage',label:'Rapportage',icon:ChartNoAxesCombined},
   {href:'/beheer/seizoenen',label:'Seizoenen',icon:CalendarRange},
   {href:'/beheer/instellingen',label:'Instellingen',icon:SlidersHorizontal},
- ]:[{href:'/',label:'Mijn overzicht',icon:LayoutDashboard},{href:'/diensten',label:'Diensten',icon:CalendarDays},{href:'/mijn-diensten',label:'Mijn diensten',icon:ListChecks},...(captain?[{href:'/team',label:'Mijn team',icon:Users}]:[]),{href:'/profiel',label:'Mijn profiel',icon:UserRound}];
+ ]:[{href:'/',label:'Mijn overzicht',icon:LayoutDashboard},{href:'/diensten',label:'Diensten',icon:CalendarDays},{href:'/mijn-diensten',label:'Mijn diensten',icon:ListChecks},{href:'/team',label:'Mijn team',icon:Users},{href:'/profiel',label:'Mijn profiel',icon:UserRound}];
 }
 function TeamDutyCount({count}:{count:number|null}) {return count!==null&&count>0?<span className="team-duty-count" aria-label={`${count} teamdiensten nog toe te wijzen`} title={`${count} teamdiensten nog toe te wijzen`}>{count}</span>:null;}
 export function MobileNavLinks({management,captain,pendingTeamDuties=null}:{management:boolean;captain:boolean;pendingTeamDuties?:number|null}) {
  const path=usePathname(),adminMode=management&&(path==='/beheer'||path.startsWith('/beheer/'));
- const destinations=adminMode?['/beheer','/beheer/planning','/beheer/wedstrijden']:[ '/', '/diensten', '/mijn-diensten',...(captain?['/team']:[]),'/profiel'];
+ const destinations=adminMode?['/beheer','/beheer/planning','/beheer/wedstrijden']:[ '/', '/diensten', '/mijn-diensten','/team','/profiel'];
  const labels:Record<string,string>={'/':'Overzicht','/profiel':'Profiel','/diensten':'Diensten'};
  return <>{workspaceLinks(adminMode,captain).filter(link=>destinations.includes(link.href)).sort((a,b)=>destinations.indexOf(a.href)-destinations.indexOf(b.href)).map(({href,label,icon:Icon})=>{
   const active=href==='/'||href==='/beheer'?path===href:path===href||path.startsWith(href+'/');

@@ -133,7 +133,7 @@ export async function activateSeason(f:FormData) {
 }
 export async function createTeam(f: FormData) {
   await run('/beheer/teams', async () => {
-    const { db } = await manager(); const { error } = await db.rpc('create_team_with_level', { p_competition:competitionLevelSchema.parse(text(f,'competition')), p_season: id.parse(f.get('season_id')), p_name: z.string().min(1).parse(text(f, 'name')), p_age: z.enum(['youth','senior']).parse(f.get('age')) });
+    const { db } = await manager(); const { error } = await db.rpc('create_team_with_level', { p_competition:competitionLevelSchema.parse(text(f,'competition')), p_season: id.parse(f.get('season_id')), p_name: z.string().min(1).parse(text(f, 'name')), p_age: z.enum(['youth','senior','mini']).parse(f.get('age')) });
     if (error) throw new Error(error.code==='PGRST202'?'Voer eerst migratie 006_competition_referee_rules.sql uit in Supabase.':error.message);
   });
 }
@@ -209,11 +209,12 @@ export async function createMatchDuty(f:FormData) {
 export async function createMatchDutiesForPeriod(_state:MatchDutyPeriodState,f:FormData):Promise<MatchDutyPeriodState> {
  try {
   const {db}=await manager();
-  const input=matchDutyPeriodSchema.parse({season:text(f,'season'),from:text(f,'from'),until:text(f,'until')});
-  const {data,error}=await db.rpc('create_match_duties_for_period',{p_season:input.season,p_from:input.from,p_until:input.until});
-  if(error) return {error:error.code==='PGRST202'?'Voer migratie 012_match_duty_period.sql uit om fluitdiensten per periode aan te maken.':error.message};
+  const input=matchDutyPeriodSchema.parse({season:text(f,'season'),from:text(f,'from'),until:text(f,'until'),teams:f.getAll('team_id')});
+  if(!input.teams?.length)return {error:'Selecteer minstens één thuisteam.'};
+  const {data,error}=await db.rpc('create_selected_match_duties_for_period',{p_season:input.season,p_from:input.from,p_until:input.until,p_teams:input.teams});
+  if(error) return {error:error.code==='PGRST202'?'Voer migratie 022_selected_match_duty_period.sql uit om fluitdiensten voor geselecteerde teams aan te maken.':error.message};
   revalidatePath('/','layout');return {counts:data};
- } catch(e) {return {error:e instanceof z.ZodError?'Kies geldige datums; Tot en met moet op of na Vanaf liggen.':e instanceof Error?e.message:'Het aanmaken is niet gelukt. Probeer opnieuw.'};}
+ } catch(e) {return {error:e instanceof z.ZodError?'Kies geldige datums en teams; Tot en met moet op of na Vanaf liggen.':e instanceof Error?e.message:'Het aanmaken is niet gelukt. Probeer opnieuw.'};}
 }
 export async function syncNevobo() {
  await manager();

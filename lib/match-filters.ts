@@ -1,3 +1,4 @@
+import { matchAge } from './team-age';
 import { z } from 'zod';
 import { statusLabels, type MatchStatus } from './nevobo/types';
 
@@ -5,7 +6,7 @@ export type MatchFilterRecord={id:string;home_team:string;away_team:string;start
 export type MatchView='upcoming'|'history'|'all';
 export const matchFilterStatusLabels={...statusLabels,elapsed:'Afgelopen'};
 export type DisplayMatchStatus=keyof typeof matchFilterStatusLabels;
-export type MatchFilters={view:MatchView;day:string;team:string;location:string;status:string;match:string};
+export type MatchFilters={view:MatchView;day:string;team:string;location:string;status:string;match:string;age?:string};
 const dayFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Amsterdam',year:'numeric',month:'2-digit',day:'2-digit'});
 export function matchDay(value:string|null) {
  if(!value) return '';
@@ -29,11 +30,12 @@ export function matchLocationLabel(match:Pick<MatchFilterRecord,'location'|'city
 export function matchFilters(params:Record<string,string|undefined>):MatchFilters {
  return {view:params.view==='history'?'history':params.view==='all'?'all':'upcoming',
   day:z.iso.date().safeParse(params.day).success?params.day!:'',team:params.team ?? '',location:params.location ?? '',
-  status:Object.hasOwn(matchFilterStatusLabels,params.status ?? '')?params.status!:'',match:params.match ?? ''};
+  status:Object.hasOwn(matchFilterStatusLabels,params.status ?? '')?params.status!:'',match:params.match ?? '',age:['senior','youth','mini'].includes(params.age??'')?params.age:''};
 }
-export function selectMatches<T extends MatchFilterRecord>(source:T[],filters:MatchFilters,now:Date):T[] {
+export function selectMatches<T extends MatchFilterRecord>(source:T[],filters:MatchFilters,now:Date,teams:{name:string;age_class:string}[]=[]):T[] {
  const matches=source.filter(m=>{
   if(filters.match && m.id!==filters.match) return false;
+  if(filters.age&&matchAge(m,teams)!==filters.age)return false;
   const past=m.status==='played'||Boolean(m.starts_at && new Date(m.starts_at)<=now);
   if(filters.view==='history'?!past:filters.view==='upcoming'&&past) return false;
   return (!filters.day||matchDay(m.starts_at)===filters.day)
@@ -45,7 +47,7 @@ export function selectMatches<T extends MatchFilterRecord>(source:T[],filters:Ma
 }
 export function matchFilterUrl(filters:MatchFilters,options:{view?:MatchView;page?:number;clearMatch?:boolean}={},base='/wedstrijden') {
  const params=new URLSearchParams({view:options.view ?? filters.view});
- for(const key of ['day','team','location','status','match'] as const) {
+ for(const key of ['day','team','location','status','match','age'] as const) {
   if(filters[key] && !(key==='match'&&options.clearMatch)) params.set(key,filters[key]);
  }
  if(options.page) params.set('page',String(options.page));

@@ -1,3 +1,4 @@
+import { teamAgeLabels } from '@/lib/team-age';
 import { InfoButton } from '@/components/info-button';
 import { AdminHelp } from '@/components/admin-help';
 import { AvailableTeamSelect } from '@/components/available-team-select';
@@ -30,10 +31,10 @@ export default async function MatchesPage({searchParams,management=false}:{searc
  const matchFilterUrl=(filters:ReturnType<typeof matchFilters>,options:Parameters<typeof filterUrl>[1]={})=>filterUrl(filters,options,base);
  const filters=matchFilters(params),{view}=filters;
  const source=management?data.matches.filter(m=>keistadTeamKey(m.home_team)!==null):data.matches;
- const matches=selectMatches(source,filters,now);
+ const matches=selectMatches(source,filters,now,data.teams);
  const teams=[...new Set(source.flatMap(m=>[m.home_team,m.away_team]))].sort((a,b)=>a.localeCompare(b,'nl',{numeric:true}));
  const locations=[...new Map(source.map(m=>[matchLocationValue(m),matchLocationLabel(m)])).entries()].sort((a,b)=>a[1].localeCompare(b[1],'nl'));
- const hasFilters=Boolean(filters.day||filters.team||filters.location||filters.status||filters.match);
+ const hasFilters=Boolean(filters.day||filters.team||filters.location||filters.status||filters.match||filters.age);
  const pageCount=Math.max(1,Math.ceil(matches.length/50));
  const requested=Number.parseInt(params.page ?? '1',10);
  const page=Math.min(pageCount,Math.max(1,Number.isFinite(requested)?requested:1));
@@ -43,11 +44,12 @@ export default async function MatchesPage({searchParams,management=false}:{searc
  const stale=sync?.last_success_at && now.getTime()-new Date(sync.last_success_at).getTime()>5*3600000;
  return <Shell data={data}><Heading help={management?<InfoButton topic="Wedstrijden beheren"><AdminHelp topic="matches"/></InfoButton>:undefined} title="Wedstrijden" description={management?'Thuiswedstrijden van AVV Keistad':undefined}>{manager && <Link className="button secondary" href={`${base}/log`}>Wijzigingslog</Link>}{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>{manager&&!settings?.available&&<p className="notice warning">Voer migratie 008 uit voor teamtoewijzing en standaardpunten voor fluitdiensten.</p>}
   <div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
-  {manager&&data.season&&<MatchDutyPeriodForm season={data.season.id} today={new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Amsterdam'})} available={Boolean(settings?.available)} points={settings?.available?settings.refereePoints:null}/>}
+  {manager&&data.season&&<MatchDutyPeriodForm key={data.season.id} teams={data.teams} season={data.season.id} today={new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Amsterdam'})} available={Boolean(settings?.available)} points={settings?.available?settings.refereePoints:null}/>}
   {(stale || (manager && sync?.last_error_code)) && <p className="notice warning" role="alert">De wedstrijdgegevens zijn mogelijk verouderd. De laatste automatische synchronisatie moet worden gecontroleerd.</p>}
   <div className="filter-bar"><div className="tabs"><Link href={matchFilterUrl(filters,{view:'upcoming'})} className={view==='upcoming'?'selected':''} aria-current={view==='upcoming'?'page':undefined}>Programma</Link><Link href={matchFilterUrl(filters,{view:'history'})} className={view==='history'?'selected':''} aria-current={view==='history'?'page':undefined}>Historie</Link><Link href={matchFilterUrl(filters,{view:'all'})} className={view==='all'?'selected':''} aria-current={view==='all'?'page':undefined}>Alle wedstrijden</Link>{filters.match && <Link href={matchFilterUrl(filters,{clearMatch:true})}>Selectie wissen</Link>}</div><span className="muted small" role="status">{matches.length} {matches.length===1?'wedstrijd':'wedstrijden'} · Nederlandse tijd</span></div>
 <FilterPanel active={hasFilters}>  <form method="get" action={base} className="match-filters" aria-label="Wedstrijden filteren" key={matchFilterUrl(filters)}>
    <input type="hidden" name="view" value={view}/>{filters.match && <input type="hidden" name="match" value={filters.match}/>}
+   {manager&&<div className="match-filter-field"><label htmlFor="match-filter-age">Leeftijdscategorie</label><select id="match-filter-age" name="age" defaultValue={filters.age??''}><option value="">Alle categorieën</option>{Object.entries(teamAgeLabels).map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>}
    <div className="match-filter-field"><label htmlFor="match-filter-day">Dag</label><input id="match-filter-day" type="date" name="day" defaultValue={filters.day}/></div>
    <div className="match-filter-field"><label htmlFor="match-filter-team">Team</label><select id="match-filter-team" name="team" defaultValue={filters.team}><option value="">Alle teams</option>{filters.team && !teams.includes(filters.team) && <option value={filters.team}>{filters.team} (niet beschikbaar)</option>}{teams.map(team=><option key={team} value={team}>{team}</option>)}</select></div>
    <div className="match-filter-field"><label htmlFor="match-filter-location">Locatie</label><select id="match-filter-location" name="location" defaultValue={filters.location}><option value="">Alle locaties</option>{filters.location && !locations.some(([value])=>value===filters.location) && <option value={filters.location}>Locatie niet beschikbaar</option>}{locations.map(([value,label])=><option key={value} value={value}>{label}</option>)}</select></div>

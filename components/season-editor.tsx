@@ -29,7 +29,7 @@ export function SeasonEditor({season,previous,hasActive}:{season:Season|null;pre
    {field('name','Seizoensnaam')}
    <div className="form-grid">{field('start','Begindatum','date')}{field('end','Einddatum','date')}</div>
    {field('norm','Algemene puntennorm','number')}
-   <div className="form-grid">{field('youth','Puntennorm jeugd','number',false)}{field('senior','Puntennorm senioren','number',false)}</div>
+   <div className="form-grid">{field('youth','Puntennorm jeugd en Mini’s','number',false)}{field('senior','Puntennorm senioren','number',false)}</div>
    <p className="field-help">Een persoonlijke norm gaat voor de leeftijdsnorm; daarna geldt de algemene norm. Een gewijzigde norm past het puntendoel aan, niet de behaalde punten.</p>
    {!season && <p className="field-help">{hasActive?'Het huidige seizoen blijft actief. Je kunt dit seizoen na het opslaan apart activeren.':'Dit wordt het actieve seizoen, omdat er nog geen actief seizoen is.'} Teamindelingen en diensten worden niet automatisch overgenomen.</p>}
    {state.error && <p className="notice error" role="alert">{state.error}</p>}

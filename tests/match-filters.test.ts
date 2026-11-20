@@ -43,10 +43,17 @@ test('statusfilter volgt labels, historie en sluiting zonder gespeeld te verzinn
 test('filters blijven gecodeerd bewaard in tab- en paginalinks, zonder oude paginanummers',()=>{
  const filters=matchFilters({view:'all',day:'2026-11-10',team:"Lammerink/Set-Up '65 DS 1 & Club",location:matchLocationValue(source[0]),status:'scheduled',match:'home'});
  const link=new URL(matchFilterUrl(filters,{page:2}),'https://app.example.test');
- for(const [key,value] of Object.entries(filters)) assert.equal(link.searchParams.get(key),value);
+ for(const [key,value] of Object.entries(filters)) if(value)assert.equal(link.searchParams.get(key),value);
  assert.equal(link.searchParams.get('page'),'2');
  const history=new URL(matchFilterUrl(filters,{view:'history'}),'https://app.example.test');
  assert.equal(history.searchParams.get('page'),null);assert.equal(history.searchParams.get('team'),filters.team);
  assert.equal(new URL(matchFilterUrl(filters,{clearMatch:true}),'https://app.example.test').searchParams.get('match'),null);
  assert.equal(matchFilterUrl(matchFilters({view:'all'})),'/wedstrijden?view=all');
+});
+
+
+test('leeftijdsfilter onderscheidt senioren, jeugd en L-mini’s en blijft in paginalinks',()=>{
+ const fixtures=[{...source[0],id:'senior',home_team:'AVV Keistad HS 1'},{...source[0],id:'youth',home_team:'AVV Keistad MA 1'},{...source[0],id:'mini',home_team:'Sponsor/AVV Keistad L2 1'}];
+ for(const age of ['senior','youth','mini']){const f=matchFilters({view:'all',age});assert.deepEqual(selectMatches(fixtures,f,now).map(m=>m.id),[age]);assert.equal(new URL(matchFilterUrl(f,{page:2},'/beheer/wedstrijden'),'https://example.test').searchParams.get('age'),age);}
+ assert.equal(matchFilters({age:'invalid'}).age,'');
 });

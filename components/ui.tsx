@@ -1,3 +1,4 @@
+import { cache } from 'react';
 import { ConfirmSubmitButton } from '@/components/confirm-submit-button';
 import { canTakeDutySlot,dutyTeamSummary,dutySlotTeams } from '@/lib/duty-slots';
 import { SubmitButton } from '@/components/submit-button';
@@ -19,11 +20,15 @@ export function PointsProgress({earned,planned,norm}:{earned:number;planned:numb
   const completed=Math.max(0,Math.min(100,earned/norm*100)),scheduled=Math.max(0,Math.min(100-completed,planned/norm*100));
   return <div className="points-progress"><div className="progress-caption"><span>Voortgang naar je doel</span><strong>{Math.round(completed)}%</strong></div><div className="progress-track" role="progressbar" aria-label="Behaalde punten" aria-valuemin={0} aria-valuemax={norm} aria-valuenow={Math.max(0,Math.min(norm,earned))} aria-valuetext={`${earned} van ${norm} punten behaald, ${planned} punten ingepland`}><span className="progress-earned" style={{width:`${completed}%`}}/><span className="progress-planned" style={{width:`${scheduled}%`}}/></div><div className="progress-legend"><span><i aria-hidden="true"/>Behaald</span><span><i aria-hidden="true"/>Ingepland</span></div></div>;
 }
+const dutyCardIndex=cache((data:AppData)=>{
+ const owned=data.enrollments.filter(e=>e.member_id===data.profile.id&&!e.revoked);
+ return {owned,enrollments:new Map(owned.map(e=>[e.duty_id,e])),duties:new Map(data.duties.map(d=>[d.id,d])),availability:new Map(data.availability.map(a=>[a.duty_id,a])),team:data.memberships.find(m=>m.member_id===data.profile.id)?.team_id};
+});
 export function DutyCard({ duty: d, data, compact=false,participants,listView=false }: { duty: Duty; data: AppData; compact?: boolean; participants?:DutyParticipant[]; listView?:boolean }) {
-  const e = data.enrollments.find(e=>e.duty_id===d.id && e.member_id===data.profile.id && !e.revoked);
-  const availability = data.availability.find(a=>a.duty_id===d.id);
+  const index=dutyCardIndex(data),e=index.enrollments.get(d.id);
+  const availability = index.availability.get(d.id);
   const count = Number(availability?.occupied ?? 0);
-  const memberTeam=data.memberships.find(m=>m.member_id===data.profile.id)?.team_id;
+  const memberTeam=index.team;
   const takeover = availability?.slots?availability.slots.find(s=>s.offered_id&&s.offered_id!==e?.id&&(!s.team_id||s.team_id===memberTeam))?.offered_id:availability?.offered_ids.find(id=>id!==e?.id);
   const finished = new Date(d.ends_at) <= new Date();
   const started = new Date(d.starts_at) <= new Date();
@@ -31,8 +36,8 @@ export function DutyCard({ duty: d, data, compact=false,participants,listView=fa
   const eligible = d.kind==='referee'?canReferee(data.profile.referee_qualification,d.required_qualification):data.profile.referee_level>=d.required_level;
   const qualificationMessage=d.kind==='referee'?isRefereeLevel(d.required_qualification)?isRefereeLevel(data.profile.referee_qualification)?`Scheidsrechtersniveau ${d.required_qualification} vereist`:'Je scheidsrechtersniveau is nog niet ingesteld':'De beheerder moet het vereiste niveau instellen':'Neem contact op met de beheerder over je bevoegdheid';
   const qualificationReason=listView&&d.kind==='referee'&&isRefereeLevel(d.required_qualification)&&isRefereeLevel(data.profile.referee_qualification)?'Je hebt niet het vereiste scheidsrechtersniveau.':qualificationMessage;
-  const ownTeam = data.memberships.find(m=>m.member_id===data.profile.id)?.team_id;
-  const conflict=data.enrollments.some(e=>e.member_id===data.profile.id&&!e.revoked&&e.duty_id!==d.id&&data.duties.some(other=>other.id===e.duty_id&&!other.cancelled&&overlaps(d,other)));
+  const ownTeam = index.team;
+  const conflict=index.owned.some(e=>{const other=index.duties.get(e.duty_id);return e.duty_id!==d.id&&other&&!other.cancelled&&overlaps(d,other);});
   const TypeIcon=d.kind==='bar'?Coffee:d.kind==='referee'?Trophy:d.kind==='event'?CalendarDays:ListChecks;
   const remaining=Math.max(0,d.capacity-count);
   const typeBadge=<span className="badge duty-type"><TypeIcon size={16} aria-hidden="true"/>{d.kind==='lines'?'Overige dienst':kindLabels[d.kind]}</span>;

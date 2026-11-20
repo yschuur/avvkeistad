@@ -912,3 +912,17 @@ h3 { font-size: 19px; }
 .admin-help ol, .admin-help ul { margin: 0; padding-left: 22px; }
 .admin-help li { padding-left: 2px; overflow-wrap: anywhere; }
 .admin-help li + li { margin-top: var(--space-2); }
+
+
+/* Child destinations are visibly subordinate to the Services disclosure. */
+.sidebar .nav-submenu { margin: 4px 0 12px 20px; padding: 4px 0 4px 10px; border-left: 2px solid var(--sidebar-muted); }
+.sidebar .nav-submenu .nav-link { min-height: 36px; padding: 8px 10px; font-size: 13px; font-weight: 500; border-radius: var(--radius-sm); }
+.sidebar .nav-submenu .nav-link svg { width: 14px; height: 14px; }
+.sidebar .nav-submenu .nav-link.active { font-weight: 700; }
+.period-team-selection { grid-column: 1 / -1; min-width: 0; padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius); }
+.period-team-selection legend { padding: 0 var(--space-2); font-weight: 650; }
+.period-team-options { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(220px,100%),1fr)); gap: var(--space-2); max-height: 260px; overflow-y: auto; margin-top: var(--space-2); padding: 2px; }
+.period-team-options .checkbox { min-height: 44px; align-items: center; overflow-wrap: anywhere; }
+@media(max-width:768px) { .sidebar .nav-submenu .nav-link { min-height: 44px; } .period-team-options { grid-template-columns: 1fr; } }
+@media(min-width:769px) { .management-workspace .match-filter-actions { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); } }
+@media(max-width:768px) { .team-points-table th:nth-child(4) { width: 20%; white-space: nowrap; } }
