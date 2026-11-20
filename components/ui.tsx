@@ -37,7 +37,7 @@ export function DutyCard({ duty: d, data, compact=false,participants,listView=fa
   const typeBadge=<span className="badge duty-type"><TypeIcon size={16} aria-hidden="true"/>{d.kind==='lines'?'Overige dienst':kindLabels[d.kind]}</span>;
   const teamAllowed = dutySlotTeams(d).some(team=>!team||team===ownTeam);
   const slotAvailable=canTakeDutySlot(d,ownTeam,availability,data.enrollments);
-  const showAvailabilityReason=!listView||(!closed&&!d.cancelled&&(!ownTeam||!eligible||conflict||!teamAllowed||(!slotAvailable&&count<d.capacity)));
+  const showAvailabilityReason=(!listView||(!closed&&!d.cancelled&&(!ownTeam||!eligible||conflict||!teamAllowed||(!slotAvailable&&count<d.capacity))))&&(closed||d.cancelled||!ownTeam||!eligible||conflict||!teamAllowed||!slotAvailable||Boolean(takeover));
   return <article className={`duty-card ${compact?'compact':''}`} aria-labelledby={`duty-${d.id}`}>
     <div className="duty-main">{listView&&typeBadge}<h3 id={`duty-${d.id}`}>{d.title}</h3><div className="duty-meta">{!listView&&typeBadge}{d.kind==='referee' && <span>{isRefereeLevel(d.required_qualification)?`Niveau ${d.required_qualification}`:'Niveau nog niet ingesteld'}</span>}<span>{d.location}</span>{(d.slot_team_ids?.some(Boolean)||d.assigned_team_id)&&<span>{dutyTeamSummary(d,data.teams)}</span>}</div></div>
     <div className="duty-when">{listView?<span>{time(d.starts_at)}–{time(d.ends_at)}</span>:<><span><CalendarDays size={18} aria-hidden="true"/>{date(d.starts_at)}</span><small><Clock3 size={18} aria-hidden="true"/>{time(d.starts_at)}–{time(d.ends_at)}</small></>}</div>

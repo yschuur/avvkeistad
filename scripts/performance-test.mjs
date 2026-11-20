@@ -354,6 +354,35 @@ try {
  await directoryAdmin.goto(base+'/beheer/leden?q=ontbrekend-resultaat');await directoryAdmin.getByText('Geen leden gevonden voor deze selectie.',{exact:true}).waitFor();assert.equal(await directoryAdmin.locator('#lidinstellen').count(),0);
  memberDirectoryFixtures=null;await directoryAdmin.close();
  console.log('Ledenpaginering en teamindeling geslaagd: 25 backendresultaten, volgende/vorige, zoek- en teamfilters, direct lid buiten de pagina, geen zware datalading, panelen bovenaan en 320/390/768/1440px.');
+
+ { // Member-facing refinements: ratio, nonduplicated capacity, qualification scope and desktop filters.
+ const savedNorm=testSeasons[0].senior_norm,savedAwards=testAwards,savedDuties=extraDuties;
+ testSeasons[0].senior_norm=16;testAwards=[{id:'92000000-0000-4000-8000-000000000001',member_id:memberA,season_id:season,title:'Lokale testtoekenning',points:5,group_id:null,definition_id:null}];
+ const openDuty={...testDuty,id:'52000000-0000-4000-8000-000000000001',title:'Test open dienst',starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()};
+ extraDuties=[openDuty,{...openDuty,id:'52000000-0000-4000-8000-000000000002',title:'Test bevoegde fluitdienst',kind:'referee',required_qualification:'N1',required_level:8}];
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,769,1024,1099,1100,1440]) {
+  await page.setViewportSize({width,height:950});await page.goto(base+'/',{waitUntil:'networkidle'});
+  assert.equal((await page.locator('.score-ratio').textContent()).replace(/\s/g,''),'5/16punten');assert.equal(await page.locator('.score-target').count(),0);assert.equal(await page.getByRole('progressbar').getAttribute('aria-valuemax'),'16');
+  const card=page.locator('.duty-card').filter({has:page.getByRole('heading',{name:'Test open dienst',exact:true})});assert.equal(await card.locator('.duty-availability').count(),0);await card.getByText('2 plekken vrij',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  if(process.env.SCREENSHOT_DIR&&[390,1440].includes(width))await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/punten-verhouding-${width}.png`,fullPage:true});
+  await page.goto(base+'/diensten',{waitUntil:'networkidle'});
+  const kind=await page.locator('#member-duty-kind').boundingBox(),team=await page.locator('#member-duty-team').boundingBox(),button=await page.getByRole('button',{name:'Filteren',exact:true}).boundingBox();
+  if(width>768){assert.ok(Math.abs(kind.y-team.y)<1,'Desktop fields share a row');assert.ok(kind.width>120&&team.width>120);if(width>=1100)assert.ok(Math.abs(kind.y+kind.height-button.y-button.height)<1,'Desktop button aligns with fields');else assert.ok(button.y>=kind.y+kind.height,'Tablet actions below fields');}
+  else assert.ok(team.y>=kind.y+kind.height,'Mobile fields remain stacked');
+  for(const summary of await page.locator('.duty-day>summary').all())await summary.click();
+  const blocked=page.locator('.duty-card').filter({has:page.getByRole('heading',{name:'Test bevoegde fluitdienst',exact:true})});await blocked.getByText('Je hebt niet het vereiste scheidsrechtersniveau.',{exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  if(process.env.SCREENSHOT_DIR&&[390,1440].includes(width))await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/diensten-filters-${width}.png`,fullPage:true});
+ }
+ for(const [code,description] of [['N1','t/m Superdivisie (N1)'],['R1','t/m 3e Divisie (R1)'],['V4','t/m 1e & 2e klasse (senioren) en Hoofdklasse (jeugd) (V4)'],[null,'Niet ingesteld']]) {
+  if(code)refereeQualifications.set(memberA,code);else refereeQualifications.delete(memberA);
+  await page.goto(base+'/profiel');const qualification=page.locator('.profile-details>div').filter({has:page.locator('dt',{hasText:'Scheidsrechtersniveau'})});assert.equal(await qualification.locator('dd').textContent(),description);
+ }
+ refereeQualifications.set(memberA,'V6');testSeasons[0].senior_norm=savedNorm;testAwards=savedAwards;extraDuties=savedDuties;await page.setViewportSize({width:1280,height:950});await page.goto(base+'/');
+ console.log('Ledenweergave geslaagd: behaald/doel punten, geen dubbele beschikbaarheid, blokkadereden behouden, volledige licentieomschrijving en uitgelijnde filters op 320/390/768/769/1024/1099/1100/1440px.');
+ }
  // A member gets only own information; completed services remain accessible.
  assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link').allTextContents(),['Mijn overzicht','Diensten','Mijn diensten','Mijn profiel']);
  const pastId='50000000-0000-4000-8000-000000000002',foreignId='50000000-0000-4000-8000-000000000003';

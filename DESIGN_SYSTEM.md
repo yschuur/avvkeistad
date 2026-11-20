@@ -237,3 +237,10 @@ Dienstkaarten hebben neutrale typebadges, lichte punten- en beschikbaarheidsvlak
 Beheer → Leden vraagt per pagina maximaal 25 profielen op, met een exacte resultaattelling zonder alle profielen te laden. Naam/e-mail zoeken en teamfilter (ook Geen team) worden vóór paginering in de database toegepast. Voor- en achternaam kunnen samen worden gezocht. Vorige/Volgende, paginanummers en directe paginakeuze behouden de filters; een nieuw filter begint op pagina 1. Een direct geopend lid buiten de pagina wordt afzonderlijk opgehaald voor Lid instellen en verschijnt niet als extra tabelrij. Alleen functietoekenningen voor de geladen leden worden opgehaald; dienstgegevens en volledige ledenlijsten worden op deze route niet geladen. Beheerrechten en RLS blijven ongewijzigd.
 
 Beheer → Teams begint met Team aanmaken links en Fluitregels rechts. Op mobiel (≤768px) staan deze onder elkaar, met Team aanmaken eerst. De opsomming Teams dit seizoen vervalt uit het aanmaakpaneel; de echte teamlijst en het seizoenaantal blijven eronder beschikbaar.
+
+
+## Verfijning ledenweergaven
+
+Mijn punten toont behaalde punten en seizoensdoel samen als behaald/doel punten (bijvoorbeeld 5/16 punten), zonder losse doelbadge. Onbekende doelen blijven onbekend; bestaande seizoen-/teamuitleg en voortgang blijven behouden. Gewone beschikbare dienstkaarten herhalen niet het aantal beschikbaar boven Inschrijven: dit staat al bij plekken vrij. Blokkaderedenen, overname en overige relevante statussen blijven zichtbaar. Mijn profiel gebruikt dezelfde volledige scheidsrechtersomschrijving als Mijn team: niveaucode én de bijbehorende competitiegrens.
+
+Op desktop heeft Diensten een volledige filterrij met twee gelabelde selectvelden en een bijbehorende actiegroep, onder de resultaattelling. Vanaf 1100px staan beide velden en de acties naast elkaar; op smallere desktops/tablets staat de actiegroep op een tweede rij. Onder 769px blijft de bestaande mobiele indeling met gestapelde filters behouden. Filterwaarden, GET-navigatie en teamfilterbetekenis wijzigen niet.
