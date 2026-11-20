@@ -1,3 +1,5 @@
+import { InfoButton } from '@/components/info-button';
+import { memberHelp } from '@/lib/member-help';
 import Link from 'next/link';
 import { Award,CalendarDays,Clock3,Plus,ArrowRight } from 'lucide-react';
 import { redirect } from 'next/navigation';
@@ -17,7 +19,7 @@ export default async function Home({searchParams}:{searchParams:Promise<Record<s
  return <Shell data={data}><Heading title="Mijn overzicht"><Link href="/diensten" className="button"><Plus size={23} aria-hidden="true"/>Open diensten</Link></Heading><Notice params={params}/>
  <div className="dashboard-layout">
  <section className="dashboard-metrics" aria-label="Puntenoverzicht">
-  <div className="dashboard-score"><div className="score-header"><h2><Award size={28} aria-hidden="true"/>Mijn punten</h2>{!known&&<span className="score-context">{data.season?'Nog geen teamindeling':'Geen actief seizoen'}</span>}</div><dl><dt className="sr-only">Behaald</dt><dd className="metric-number score-ratio">{known?<><span>{p.earned}</span><span className="metric-target">/{p.norm}</span><span className="metric-unit">punten</span></>:'—'}</dd></dl>{known&&<PointsProgress earned={p.earned} planned={p.planned} norm={p.norm}/>}</div>
+  <div className="dashboard-score"><div className="score-header"><div className="heading-with-info"><h2><Award size={28} aria-hidden="true"/>Mijn punten</h2><InfoButton topic="Mijn punten"><p>{memberHelp.points}</p></InfoButton></div>{!known&&<span className="score-context">{data.season?'Nog geen teamindeling':'Geen actief seizoen'}</span>}</div><dl><dt className="sr-only">Behaald</dt><dd className="metric-number score-ratio">{known?<><span>{p.earned}</span><span className="metric-target">/{p.norm}</span><span className="metric-unit">punten</span></>:'—'}</dd></dl>{known&&<PointsProgress earned={p.earned} planned={p.planned} norm={p.norm}/>}</div>
   <div className="dashboard-metric"><h2><CalendarDays size={28} aria-hidden="true"/>Ingepland</h2><dl><dt className="sr-only">Ingepland</dt><dd className="metric-number">{known?p.planned:'—'}</dd></dl></div>
   <div className="dashboard-metric"><h2><Clock3 size={28} aria-hidden="true"/>Nog te behalen</h2><dl><dt className="sr-only">Nog te behalen</dt><dd className="metric-number">{known?p.toEarn:'—'}</dd></dl></div>
  </section>

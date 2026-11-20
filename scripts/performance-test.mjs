@@ -229,7 +229,7 @@ const mock=createServer(async(req,res)=>{
   result=[...ownBase,...extraEnrollments].filter(e=>(!member||e.member_id===member)&&allDutyRows.some(d=>d.id===e.duty_id&&inWindow(d,'duties.')));
  }
  if(url.pathname==='/rest/v1/rpc/duty_participants') result=[...(!hideTestEnrollment?[{duty_id:testDuty.id,member_id:memberA}]:[]),...extraEnrollments].filter(e=>!e.revoked).map(e=>({duty_id:e.duty_id,first_name:profile(e.member_id).first_name,last_name:profile(e.member_id).last_name}));
- if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:[]}))].map(a=>{
+ if(url.pathname==='/rest/v1/rpc/duty_availability') result=[{duty_id:testDuty.id,occupied:0,offered_ids:[]},...extraDuties.map(d=>({duty_id:d.id,occupied:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked).length,offered_ids:extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked&&e.offered).map(e=>e.id)}))].map(a=>{
   const d=[testDuty,...extraDuties].find(d=>d.id===a.duty_id);if(!('slot_team_ids' in d))return a;
   const active=extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked);return {...a,occupied:active.length,slots:(d.slot_team_ids??Array(d.capacity).fill(d.assigned_team_id)).map((t,i)=>({slot:i+1,team_id:t,occupied:active.some(e=>e.slot_number===i+1),offered_id:null}))};
  });
@@ -382,6 +382,37 @@ try {
  }
  refereeQualifications.set(memberA,'V6');testSeasons[0].senior_norm=savedNorm;testAwards=savedAwards;extraDuties=savedDuties;await page.setViewportSize({width:1280,height:950});await page.goto(base+'/');
  console.log('Ledenweergave geslaagd: behaald/doel punten, geen dubbele beschikbaarheid, blokkadereden behouden, volledige licentieomschrijving en uitgelijnde filters op 320/390/768/769/1024/1099/1100/1440px.');
+ }
+
+ { // Help is opt-in and signups must not write until explicitly confirmed.
+ const helpDuty={...testDuty,id:'53000000-0000-4000-8000-000000000001',title:'Lokale bevestigingstest',starts_at:new Date(Date.now()+3*86400000).toISOString(),ends_at:new Date(Date.now()+3*86400000+7200000).toISOString()};
+ const takeoverDuty={...helpDuty,id:'53000000-0000-4000-8000-000000000002',title:'Lokale overnametest',capacity:1,starts_at:new Date(Date.now()+4*86400000).toISOString(),ends_at:new Date(Date.now()+4*86400000+7200000).toISOString()};
+ const offeredId='85000000-0000-4000-8000-000000000033';extraDuties=[helpDuty,takeoverDuty];extraEnrollments=[{id:offeredId,duty_id:takeoverDuty.id,member_id:memberB,created_at:new Date().toISOString(),revoked:false,offered:true}];
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,1440]) {
+  await page.setViewportSize({width,height:900});
+  for(const [path,topic,body] of [['/','Mijn punten','Nog te behalen is je norm min Behaald'],['/diensten','Teamfilter','thuisteam van de wedstrijd'],['/profiel','Puntennorm','leeftijdsklasse'],['/mijn-diensten','Afmelden en overname','24 uur na je inschrijving']]) {
+   await page.goto(base+path,{waitUntil:'networkidle'});const trigger=page.getByRole('button',{name:'Uitleg over '+topic,exact:true});await trigger.click();
+   const help=page.getByRole('dialog',{name:topic,exact:true});await help.waitFor();assert.match(await help.textContent(),new RegExp(body));assert.equal(await help.evaluate(el=>el.contains(document.activeElement)),true);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+   if(process.env.SCREENSHOT_DIR&&topic==='Teamfilter')await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/uitleg-${width}.png`});
+   await page.keyboard.press('Escape');await help.waitFor({state:'hidden'});assert.equal(await trigger.evaluate(el=>document.activeElement===el),true);await page.waitForFunction(el=>el.getAttribute('aria-expanded')==='false',await trigger.elementHandle());
+  }
+ }
+ await page.setViewportSize({width:390,height:844});await page.goto(base+'/diensten');const filterHelp=page.getByRole('button',{name:'Uitleg over Teamfilter',exact:true});const beforeUrl=page.url();await filterHelp.click();await page.mouse.click(2,2);await page.getByRole('dialog',{name:'Teamfilter',exact:true}).waitFor({state:'hidden'});assert.equal(page.url(),beforeUrl,'Opening help never submits the filter');
+ for(const path of ['/','/diensten']) {
+  await page.goto(base+path);if(path==='/diensten')for(const summary of await page.locator('.duty-day>summary').all())await summary.click();
+  const card=page.locator('.duty-card').filter({has:page.getByRole('heading',{name:helpDuty.title,exact:true})}),trigger=card.getByRole('button',{name:'Inschrijven',exact:true});
+  const writesBefore=authWrites.filter(r=>r.path.endsWith('/enroll')).length;
+  await trigger.click();const confirm=page.getByRole('dialog',{name:'Inschrijving bevestigen',exact:true});await confirm.waitFor();assert.match(await confirm.textContent(),/Weet je het zeker\?/);assert.match(await confirm.textContent(),new RegExp(helpDuty.title));assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).length,writesBefore);
+  if(process.env.SCREENSHOT_DIR)await page.screenshot({path:`${process.env.SCREENSHOT_DIR}/inschrijven-${path==='/'?'dashboard':'diensten'}.png`});
+  await confirm.getByRole('button',{name:'Annuleren',exact:true}).click();assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).length,writesBefore);assert.equal(await trigger.evaluate(el=>document.activeElement===el),true);
+  await trigger.click();await page.keyboard.press('Escape');await confirm.waitFor({state:'hidden'});assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).length,writesBefore);
+ }
+ await page.goto(base+'/');const signup=page.locator('.duty-card').filter({has:page.getByRole('heading',{name:helpDuty.title,exact:true})}).getByRole('button',{name:'Inschrijven',exact:true});await signup.click();await page.getByRole('dialog',{name:'Inschrijving bevestigen',exact:true}).getByRole('button',{name:'Ja, inschrijven',exact:true}).click();await page.waitForURL(u=>u.pathname==='/mijn-diensten'&&u.searchParams.has('success'));assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).at(-1).body.p_duty,helpDuty.id);
+ await page.goto(base+'/');await page.getByRole('button',{name:'Overnemen',exact:true}).click();const takeoverConfirm=page.getByRole('dialog',{name:'Overname bevestigen',exact:true});await takeoverConfirm.getByRole('button',{name:'Ja, overnemen',exact:true}).click();await page.waitForURL(u=>u.pathname==='/mijn-diensten'&&u.searchParams.has('success'));assert.equal(authWrites.filter(r=>r.path.endsWith('/enroll')).at(-1).body.p_takeover,offeredId);
+ extraDuties=[];extraEnrollments=[];await page.setViewportSize({width:1280,height:950});await page.goto(base+'/');
+ console.log('Context en inschrijfbevestiging geslaagd: vier gerichte uitlegplekken, mobiele vensters, Escape/buitenklik/focusterugkeer, annuleren zonder mutatie en expliciet inschrijven/overnemen met bestaande formuliergegevens.');
  }
  // A member gets only own information; completed services remain accessible.
  assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link').allTextContents(),['Mijn overzicht','Diensten','Mijn diensten','Mijn profiel']);
@@ -1259,6 +1290,7 @@ try {
  const quick=touch.getByRole('navigation',{name:'Mobiele hoofdnavigatie'});assert.equal(await quick.getByRole('link').count(),4);
  await quick.getByRole('link',{name:'Diensten',exact:true}).tap();await touch.waitForURL(base+'/diensten');await touch.locator('.duty-day summary').first().tap();
  await touch.getByRole('article').filter({hasText:'Mobiele inschrijftest'}).getByRole('button',{name:'Inschrijven',exact:true}).tap();
+ await touch.getByRole('dialog',{name:'Inschrijving bevestigen',exact:true}).getByRole('button',{name:'Ja, inschrijven',exact:true}).tap();
  await touch.waitForURL(url=>url.pathname==='/mijn-diensten'&&url.searchParams.has('success'));await touch.getByRole('heading',{name:'Mobiele inschrijftest',exact:true}).waitFor();
  await quick.getByRole('link',{name:'Profiel',exact:true}).tap();await touch.getByRole('heading',{name:'Mijn profiel',exact:true}).waitFor();
  await touch.getByRole('button',{name:'Navigatiemenu openen'}).tap();await touch.getByRole('dialog',{name:'Navigatie',exact:true}).waitFor();await touch.keyboard.press('Escape');
