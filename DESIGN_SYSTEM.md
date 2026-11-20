@@ -1,6 +1,6 @@
 # Vrijwilligersportaal — designsysteem
 
-Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting volgt het aangeleverde referentiebeeld: warme crèmevlakken, donkerbruine serifkoppen, zachte randen en acties in de ingestelde clubkleur. Leden krijgen toegankelijke kaarten; beheer krijgt compacte tabellen en formulieren.
+Dit bestand is de vaste ontwerpstandaard voor alle bestaande en toekomstige UI. Pas documentatie en implementatie samen aan. De visuele richting volgt het aangeleverde referentiebeeld: een licht canvas, stevige schreefloze koppen, een donkere zijbalk in de ingestelde primaire clubkleur en duidelijke actieknoppen. Leden krijgen toegankelijke kaarten; beheer krijgt compacte tabellen en formulieren.
 
 ## Principes
 
@@ -18,14 +18,14 @@ De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens 
 
 | Rol | Token | Waarde / bron |
 | --- | --- | --- |
-| Canvas | `--canvas` | #fcf6f1 |
-| Oppervlak | `--surface` | #fffaf6 |
-| Sidebar / subtiel vlak | `--surface-subtle` | #faf0e8 |
-| Hover | `--surface-hover` | #f2e7de |
-| Border | `--border` | #e6d3c5 |
-| Sterkere border | `--border-strong` | #d4bbab |
-| Primaire tekst | `--text` | #321b12 |
-| Secundaire tekst | `--text-muted` | #69554a |
+| Canvas | `--canvas` | #fbfcfd |
+| Oppervlak | `--surface` | #ffffff |
+| Sidebar / subtiel vlak | `--surface-subtle` | #f3f6f7 |
+| Hover | `--surface-hover` | #eaf0f1 |
+| Border | `--border` | #d9e1e5 |
+| Sterkere border | `--border-strong` | #bbc8cf |
+| Primaire tekst | `--text` | #0c1220 |
+| Secundaire tekst | `--text-muted` | #526074 |
 | Primaire clubkleur | `--brand-primary` | Database, standaard #087d56 uit de bestaande app |
 | Secundaire clubkleur | `--brand-secondary` | Database, standaard #6483b8 uit de bestaande app |
 | Accentkleur / primaire actie | `--brand-accent`, `--accent`, `--on-accent` | Onafhankelijk opgeslagen accent en automatisch zwart/wit met minimaal 4,5:1 contrast |
@@ -38,9 +38,9 @@ De centrale implementatie staat in `app/globals.css`; berekende clubkleurtokens 
 
 De defaults zijn applicatiekleuren, geen claim over een officiële clubhuisstijl. Achtergronden en basistekst blijven neutraal. De primaire kleur markeert actieve navigatie. De onafhankelijke accentkleur bepaalt primaire acties, focus en behaalde voortgang; de secundaire kleur onderscheidt ingeplande punten en de huisstijlpreview. Typebadges zijn neutraal: een diensttype is geen waarschuwing of successtatus.
 
-Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 14px / 1,5; koppen Georgia/Times New Roman (lokaal), paginatitel 30px / 1,3, sectietitel 20px / 1,4, kaarttitel 17px. Tabel en labels 12px. Mobiel paginatitel 27px en sectietitel 19px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
+Typografie: lokale systeem-sans-serif (`Inter` indien lokaal beschikbaar, daarna systeemfonts), geen externe fontrequests. Basis 14px / 1,5; koppen in dezelfde lokale sans-serif, gewicht 800. Paginatitel schaalt van 28 naar 44px, sectietitel 25px, kaarttitel 21px. Beheer houdt 32px/20px koppen en compacte tabellen. Mobiel paginatitel 30px en sectietitel 23px. Semibold 600, normale tekst 400. Getallen in tabellen gebruiken tabular numerals. Titels zijn taaknamen, geen welkomstteksten.
 
-Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` 5px voor badges, `--radius` 8px voor bediening en `--radius-lg` 14px voor panelen, ledenkaarten en dialogen. Navigatielinks hebben 11px radius. Borders 1px. Zeer zachte schaduw op het ledenpuntenpaneel en dienstkaarten; een kleine schaduw op overlays. Sidebar 216px; hoofdinhoud gebruikt de volledige beschikbare breedte naast de sidebar, zonder maximale paginabreedte. Horizontale paginamarges volgen `--page-gutter`: 16–48px via `clamp(16px, 2.5vw, 48px)`. Inloggen en foutmeldingen houden hun compacte leesbreedte. Bestaande mobiele navigatie, safe-area-ruimte en 48px touchbediening blijven behouden.
+Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `--radius-none` 0px, `--radius-sm` 5px voor badges, `--radius` 8px voor bediening en `--radius-lg` 14px voor panelen, ledenkaarten en dialogen. Navigatielinks hebben 11px radius. Borders 1px. Zeer zachte schaduw op het ledenpuntenpaneel en dienstkaarten; een kleine schaduw op overlays. Sidebar 248px; hoofdinhoud gebruikt de volledige beschikbare breedte naast de sidebar, zonder maximale paginabreedte. Horizontale paginamarges volgen `--page-gutter`: 16–48px via `clamp(16px, 2.5vw, 48px)`. Inloggen en foutmeldingen houden hun compacte leesbreedte. Bestaande mobiele navigatie, safe-area-ruimte en 48px touchbediening blijven behouden.
 
 ## Gedeelde componenten
 
@@ -60,7 +60,7 @@ Spacing: 4, 8, 12, 16, 24, 32px; gebruik `--space-1` t/m `--space-6`. Radius: `-
 
 ## Responsive en toegankelijkheid
 
-Vanaf 1440px staan op Mijn overzicht het puntenpaneel en de functiegroepen naast elkaar in een 2:1-verhouding; de titel, planning en open diensten gebruiken de volle breedte. Onder 1440px stapelen deze panelen. Kaartroosters gebruiken automatisch het aantal kolommen dat past, formulieren en tabellen benutten de beschikbare breedte. De sidebar kan bij beperkte schermhoogte verticaal scrollen.
+Mijn overzicht heeft drie puntenkaarten: een groene kaart voor Behaald met doel, voortgang en legenda, plus afzonderlijke kaarten voor Ingepland en Nog te behalen. Desktop gebruikt 2,1:1:1 kolommen. Tot 1150px staat de behaalde-puntenkaart boven de twee overige kaarten. De planning en open diensten staan eronder; functiegroepen volgen onderaan. Alle bestaande inhoud en acties blijven beschikbaar. Kaartroosters benutten de beschikbare breedte; mobiel staat één dienstkaart per rij.
 
 Breakpoints: desktop >1024px; tablet 769–1024px; mobiel ≤768px. De mobiele onderbalk gebruikt iconen én tekstlabels. De menuknop linksboven blijft ook tijdens scrollen bereikbaar en opent de volledige navigatie, waaronder aanvoerdersfuncties en de beheerschakelaar. Het paneel schuift kort vanaf links in; bij prefers-reduced-motion vervalt de animatie. Formulieren schakelen op 768px naar één kolom, lijsten stapelen. Op 1024px verdwijnt de derde formulierkolom. Primaire touchbediening is 48px hoog; overige navigatie heeft minimaal 44px bereik. De onderbalk houdt rekening met safe-area-insets. Hoofdinhoud en ankers krijgen ruimte voor boven- en onderbalk.
 
@@ -223,3 +223,10 @@ Migratie 017 voegt teamkeuzes per plek en het pleknummer van een inschrijving to
 Migratie 018 voegt in-app meldingen toe voor alle aanvoerders van het betrokken team in het actieve seizoen. Nieuwe teamplekken leveren per dienstwijziging één melding per aanvoerder op, met het nieuwe aantal en de resterende bezetting. Gelijkblijvende keuzes, het verminderen van plekken en alleen aanbieden ter overname leveren geen melding op. Nieuwe actieve inschrijvingen van eigen teamleden (ook vrijwillig op open diensten) geven Teamlid ingepland; afmelden geeft Teamlid afgemeld. Intrekken en overnemen vermelden dat de inplanning is ingetrokken en tonen de reden. Herstel van een inschrijving geldt als opnieuw ingepland. De bestaande naam en planning worden gebruikt; afgelopen en geannuleerde diensten geven deze aanvoerdersmeldingen niet.
 
 Deze meldingen gebruiken dezelfde persoonlijke inbox, ongelezen teller en gelezenstatus. Ze verwijzen met Mijn team bekijken naar /team. De ontvangers volgen team én seizoen; andere teams en gewone leden krijgen geen kopie. Er wordt geen e-mail ingepland en er zijn geen meldingen voor het binnenkort beginnen van diensten. Bestaande persoonlijke dienst- en wedstrijdmeldingen blijven behouden. De optionele team_id bij meldingen maakt de actie herkenbaar; zonder migratie blijft de bestaande inbox werken.
+
+
+## Stijl van de nieuwe mockup
+
+De zijbalk gebruikt `--sidebar-bg` en leesbare `--sidebar-text`/`--sidebar-muted`, afgeleid van de primaire clubkleur. Actieve navigatie heeft een licht gekleurd vlak met contrasterende tekst. `--highlight-bg`, `--on-highlight` en `--highlight-muted` bepalen de behaalde-puntenkaart op basis van de accentkleur. Deze tokens garanderen tekstcontrast, ook bij een witte of zwarte ingestelde clubkleur. Logo, naam, kleuren, cijfers en rollen blijven uit de bestaande configuratie/database komen; ontbrekende logo's houden het bestaande monogram. Er zijn geen nieuwe fictieve gegevens, fontrequests of visuele libraries.
+
+Dienstkaarten hebben neutrale typebadges, lichte punten- en beschikbaarheidsvlakken, een subtiele schaduw en een brede primaire knop. Knoppen op touchschermen blijven minstens 48px hoog. De bestaande vaste mobiele boven- en onderbalk, veilige schermranden, drawer, focusbediening en responsive beheertabellen blijven behouden. Nieuwe functionele iconen komen uit de bestaande lucide-react-library.

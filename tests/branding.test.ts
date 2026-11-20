@@ -16,6 +16,11 @@ test('clubkleuren houden tekst en selectie op minimaal WCAG AA contrast',()=>{
   assert.ok(contrast(t['--accent-text'],t['--accent-subtle'])>=4.5,color+' selectie');
   assert.ok(contrast(t['--focus'],'#FFFFFF')>=4.5,color+' focus');
   assert.ok(contrast(t['--secondary-text'],'#FFFFFF')>=4.5,color+' secundair');
+  assert.ok(contrast(t['--sidebar-text'],t['--sidebar-bg'])>=4.5,color+' donkere navigatie');
+  assert.ok(contrast(t['--sidebar-muted'],t['--sidebar-bg'])>=4.5,color+' secundaire navigatie');
+  assert.ok(contrast(t['--sidebar-active-text'],t['--sidebar-active'])>=4.5,color+' actieve navigatie');
+  assert.ok(contrast(t['--on-highlight'],t['--highlight-bg'])>=4.5,color+' puntenkaart');
+  assert.ok(contrast(t['--highlight-muted'],t['--highlight-bg'])>=4.5,color+' puntenlegenda');
  }
 });
 

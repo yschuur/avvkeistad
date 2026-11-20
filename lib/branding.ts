@@ -34,7 +34,12 @@ export function brandingTokens(input:Pick<Branding,'primaryColor'|'secondaryColo
   const secondary=isHexColor(input.secondaryColor)?input.secondaryColor.toUpperCase():DEFAULT_BRANDING.secondaryColor;
   const accent=input.accentColor&&isHexColor(input.accentColor)?input.accentColor.toUpperCase():primary;
   const subtle=tint(primary,0.94);
+  const sidebar=readableColor(hex(rgb(primary).map(v=>v*.5)),'#D9D9D9');
+  const highlight=readableColor(hex(rgb(accent).map(v=>v*.8)),'#D9D9D9');
+  const sidebarActive=tint(primary,.84);
   return {
+    '--sidebar-bg':sidebar,'--sidebar-text':'#FFFFFF','--sidebar-muted':tint(sidebar,.9),'--sidebar-active':sidebarActive,'--sidebar-active-text':readableColor('#111827',sidebarActive),
+    '--highlight-bg':highlight,'--on-highlight':'#FFFFFF','--highlight-muted':tint(highlight,.9),
     '--brand-primary':primary,'--brand-secondary':secondary,'--brand-accent':accent,'--accent':accent,
     '--on-accent':contrast(accent,'#FFFFFF')>=contrast(accent,'#000000')?'#FFFFFF':'#000000',
     '--accent-subtle':subtle,'--accent-text':readableColor(primary,subtle),
