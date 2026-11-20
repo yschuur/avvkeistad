@@ -43,6 +43,7 @@ let syncState={last_started_at:null,last_success_at:null,last_error_code:null,fe
 const records=[];
 const authWrites=[];
 let refereePoints=2,dutySettingsMissing=false,bulkMatchUnavailable=false,bulkMatchRuns=0;
+let memberDirectoryFixtures=null;
 let testFunctions=[],testFunctionGroups=[],testAwards=[],functionMigrationMissing=false,functionVersion=0;
 const nextFunctionId=()=>`61000000-0000-4000-8000-${String(++functionVersion).padStart(12,'0')}`;
 const assignFunctionFixture=(memberId,kind,choice)=>{
@@ -63,7 +64,7 @@ const token=id=>{
  return input+'.'+sign('sha256',Buffer.from(input),{key:privateKey,dsaEncoding:'ieee-p1363'}).toString('base64url');
 };
 const mock=createServer(async(req,res)=>{
- const url=new URL(req.url,mockUrl);records.push({path:url.pathname,query:url.searchParams,time:performance.now(),authenticated:/^Bearer eyJ/.test(req.headers.authorization??'')});
+ const url=new URL(req.url,mockUrl);records.push({method:req.method,path:url.pathname,query:url.searchParams,time:performance.now(),authenticated:/^Bearer eyJ/.test(req.headers.authorization??'')});
  let body='';for await(const chunk of req) body+=chunk;
  await new Promise(resolve=>setTimeout(resolve,150));
  res.setHeader('Content-Type','application/json');
@@ -210,7 +211,7 @@ const mock=createServer(async(req,res)=>{
   result=testFunctionGroups.filter(g=>g.season_id===url.searchParams.get('season_id')?.replace('eq.',''));
  }
  if(url.pathname==='/rest/v1/function_definitions') result=testFunctions;
- if(url.pathname==='/rest/v1/function_assignments') {const memberId=url.searchParams.get('member_id')?.replace('eq.',''),seasonId=url.searchParams.get('season_id')?.replace('eq.',''),rows=testAwards.filter(a=>(!memberId||a.member_id===memberId)&&(!seasonId||a.season_id===seasonId)),from=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??500);result=rows.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${rows.length}`:`*/${rows.length}`);}
+ if(url.pathname==='/rest/v1/function_assignments') {const memberFilter=url.searchParams.get('member_id'),memberIds=memberFilter?.startsWith('in.(')?memberFilter.slice(4,-1).split(','):memberFilter?[memberFilter.replace('eq.','')]:null,seasonId=url.searchParams.get('season_id')?.replace('eq.',''),rows=testAwards.filter(a=>(!memberIds||memberIds.includes(a.member_id))&&(!seasonId||a.season_id===seasonId)),from=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??500);result=rows.slice(from,from+limit);res.setHeader('Content-Range',result.length?`${from}-${from+result.length-1}/${rows.length}`:`*/${rows.length}`);}
  if(url.pathname==='/rest/v1/teams') result=testTeams;
  if(url.pathname==='/rest/v1/memberships') {
    const id=url.searchParams.get('member_id')?.replace('eq.','');
@@ -232,7 +233,17 @@ const mock=createServer(async(req,res)=>{
   const d=[testDuty,...extraDuties].find(d=>d.id===a.duty_id);if(!('slot_team_ids' in d))return a;
   const active=extraEnrollments.filter(e=>e.duty_id===d.id&&!e.revoked);return {...a,occupied:active.length,slots:(d.slot_team_ids??Array(d.capacity).fill(d.assigned_team_id)).map((t,i)=>({slot:i+1,team_id:t,occupied:active.some(e=>e.slot_number===i+1),offered_id:null}))};
  });
- if(url.pathname==='/rest/v1/profiles') {
+ if(url.pathname==='/rest/v1/profiles'&&url.searchParams.get('select')?.includes('memberships!')) {
+  const seasonId=url.searchParams.get('memberships.season_id')?.slice(3),id=url.searchParams.get('id')?.slice(3),team=url.searchParams.get('memberships.team_id')?.slice(3);
+  let rows=(memberDirectoryFixtures??[memberA,memberB,admin].map(member=>({...profile(member),memberships:[{member_id:member,season_id:season,team_id:teamAssignments.get(member)??teamId,captain:member===memberA&&captainA,norm_override:null}]}))).map(p=>({...p,memberships:p.memberships.filter(m=>m.season_id===seasonId)}));
+  if(id)rows=rows.filter(p=>p.id===id);
+  if(team)rows=rows.filter(p=>p.memberships.some(m=>m.team_id===team)).map(p=>({...p,memberships:p.memberships.filter(m=>m.team_id===team)}));
+  if(url.searchParams.get('memberships')==='is.null')rows=rows.filter(p=>!p.memberships.length);
+  const terms=[...(url.searchParams.get('or')??'').matchAll(/first_name\.ilike\.("(?:\\.|[^"\\])*")/g)].map(m=>JSON.parse(m[1]).slice(1,-1).replace(/\\([\\%_*])/g,'$1').toLocaleLowerCase('nl'));
+  rows=rows.filter(p=>terms.every(term=>[p.first_name,p.last_name,p.email].some(v=>v.toLocaleLowerCase('nl').includes(term)))).sort((a,b)=>a.last_name.localeCompare(b.last_name)||a.first_name.localeCompare(b.first_name)||a.id.localeCompare(b.id));
+  const offset=Number(url.searchParams.get('offset')??0),limit=Number(url.searchParams.get('limit')??25),total=rows.length;result=rows.slice(offset,offset+limit);
+  res.setHeader('Content-Range',result.length?`${offset}-${offset+result.length-1}/${total}`:`*/${total}`);
+ } else if(url.pathname==='/rest/v1/profiles') {
   const id=url.searchParams.get('id')?.replace('eq.','') ?? memberA;
   result=req.headers.accept?.includes('vnd.pgrst.object')?profile(id):url.searchParams.has('id')?[profile(id)]:[profile(memberA),profile(memberB),profile(admin)];
  }
@@ -313,6 +324,36 @@ try {
  await page.locator('button[aria-busy=true]').waitFor({timeout:1000});
  assert.equal(await page.getByRole('button',{name:/Inloggen/}).isDisabled(),true);
  await page.waitForURL(base+'/');await page.getByText('Anna Test',{exact:true}).first().waitFor();
+
+ // Member directory: backend paging, preserved search, direct member editing, and team-panel ordering.
+ const directoryAdmin=await browser.newPage();directoryAdmin.setDefaultTimeout(10000);await directoryAdmin.goto(base+'/login');await directoryAdmin.getByLabel('E-mailadres').fill('admin@example.test');await directoryAdmin.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');await directoryAdmin.getByRole('button',{name:'Inloggen',exact:true}).click();await directoryAdmin.waitForURL(base+'/');await directoryAdmin.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();await directoryAdmin.waitForLoadState('networkidle');
+ const directoryMembers=Array.from({length:66},(_,i)=>{const id=`12000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`;return {...profile(memberA),id,first_name:`Lid${String(i).padStart(3,'0')}`,last_name:i>=60?'Zoekgroep':'Paginatest',email:`lijst${i}@example.test`,role:'member',memberships:i%3===0?[]:[{member_id:id,season_id:season,team_id:teamId,captain:false,norm_override:null}]};});
+ memberDirectoryFixtures=[...directoryMembers,{...profile(admin),memberships:[{member_id:admin,season_id:season,team_id:teamId,captain:false,norm_override:null}]}];
+ records.length=0;await directoryAdmin.goto(base+'/beheer/leden',{waitUntil:'networkidle'});
+ const directoryRows=directoryAdmin.getByRole('region',{name:'Ledenoverzicht',exact:true}).locator('tbody tr'),directoryNav=directoryAdmin.getByRole('navigation',{name:'Ledenpagina’s',exact:true});
+ assert.equal(await directoryRows.count(),25);await directoryAdmin.getByText('67 gevonden',{exact:true}).waitFor();
+ assert.equal(records.some(r=>['/rest/v1/duties','/rest/v1/enrollments','/rest/v1/matches','/rest/v1/rpc/duty_availability'].includes(r.path)),false);
+ const profilePages=records.filter(r=>r.path==='/rest/v1/profiles'&&r.method==='GET'&&r.query.get('select')?.includes('memberships!')&&!r.query.has('id'));assert.equal(profilePages.length,1);assert.equal(profilePages[0].query.get('limit'),'25');
+ await directoryNav.getByRole('link',{name:'Volgende',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('page')==='2');assert.equal(await directoryRows.count(),25);
+ await directoryNav.getByRole('link',{name:'Volgende',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('page')==='3');assert.equal(await directoryRows.count(),17);assert.equal(await directoryNav.getByRole('link',{name:'Volgende',exact:true}).count(),0);
+ await directoryAdmin.getByLabel('Zoeken op naam of e-mail',{exact:true}).fill('Zoekgroep');await directoryAdmin.getByRole('button',{name:'Filteren',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('q')==='Zoekgroep');assert.equal(new URL(directoryAdmin.url()).searchParams.has('page'),false);assert.equal(await directoryRows.count(),6);await directoryAdmin.getByText('6 gevonden',{exact:true}).waitFor();
+ await directoryAdmin.getByLabel('Zoeken op naam of e-mail',{exact:true}).fill('Lid060 Zoekgroep');await directoryAdmin.getByRole('button',{name:'Filteren',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('q')==='Lid060 Zoekgroep');assert.equal(await directoryRows.count(),1);
+ await directoryAdmin.goto(base+'/beheer/leden?q=Paginatest&page=2');assert.equal(await directoryRows.count(),25);await directoryNav.getByRole('link',{name:'Vorige',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('q')==='Paginatest'&&!u.searchParams.has('page'));assert.equal(await directoryAdmin.getByLabel('Zoeken op naam of e-mail',{exact:true}).inputValue(),'Paginatest');
+ await directoryAdmin.goto(base+'/beheer/leden?team=none');assert.equal(await directoryRows.count(),22);await directoryAdmin.goto(base+'/beheer/leden?team='+teamId);assert.equal(await directoryRows.count(),25);await directoryNav.getByRole('link',{name:'Volgende',exact:true}).click();await directoryAdmin.waitForURL(u=>u.searchParams.get('team')===teamId&&u.searchParams.get('page')==='2');assert.equal(await directoryRows.count(),20);
+ await directoryAdmin.goto(base+'/beheer/leden?member='+directoryMembers[60].id+'#lidinstellen');assert.equal(await directoryRows.count(),25);assert.equal(await directoryAdmin.locator('#lidinstellen select[name=member_id]').inputValue(),directoryMembers[60].id);assert.equal(await directoryAdmin.locator('#lidinstellen select[name=member_id]').locator('option').count(),26);
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,768,1440]) {
+  await directoryAdmin.setViewportSize({width,height:950});await directoryAdmin.goto(base+'/beheer/leden?page=2',{waitUntil:'networkidle'});assert.equal(await directoryRows.count(),25);assert.equal(await directoryAdmin.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  if(process.env.SCREENSHOT_DIR)await directoryAdmin.screenshot({path:`${process.env.SCREENSHOT_DIR}/leden-pagina-${width}.png`,fullPage:true});
+  await directoryAdmin.goto(base+'/beheer/teams',{waitUntil:'networkidle'});const panels=directoryAdmin.locator('.team-management-top > .panel');assert.equal(await panels.count(),2);
+  const create=await panels.nth(0).boundingBox(),rules=await panels.nth(1).boundingBox();await panels.nth(0).getByRole('heading',{name:'Team aanmaken',exact:true}).waitFor();await panels.nth(1).getByRole('heading',{name:'Fluitregels',exact:true}).waitFor();
+  if(width<=768)assert.ok(rules.y>=create.y+create.height,'Mobile panels stack');else assert.ok(Math.abs(create.y-rules.y)<1&&rules.x>create.x,'Desktop panels align');
+  assert.equal(await directoryAdmin.getByText(/Teams dit seizoen:/).count(),0);assert.equal(await directoryAdmin.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+  if(process.env.SCREENSHOT_DIR)await directoryAdmin.screenshot({path:`${process.env.SCREENSHOT_DIR}/team-aanmaken-${width}.png`,fullPage:true});
+ }
+ await directoryAdmin.goto(base+'/beheer/leden?q=ontbrekend-resultaat');await directoryAdmin.getByText('Geen leden gevonden voor deze selectie.',{exact:true}).waitFor();assert.equal(await directoryAdmin.locator('#lidinstellen').count(),0);
+ memberDirectoryFixtures=null;await directoryAdmin.close();
+ console.log('Ledenpaginering en teamindeling geslaagd: 25 backendresultaten, volgende/vorige, zoek- en teamfilters, direct lid buiten de pagina, geen zware datalading, panelen bovenaan en 320/390/768/1440px.');
  // A member gets only own information; completed services remain accessible.
  assert.deepEqual(await page.getByRole('navigation',{name:'Hoofdnavigatie',exact:true}).getByRole('link').allTextContents(),['Mijn overzicht','Diensten','Mijn diensten','Mijn profiel']);
  const pastId='50000000-0000-4000-8000-000000000002',foreignId='50000000-0000-4000-8000-000000000003';

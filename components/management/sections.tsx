@@ -31,7 +31,7 @@ export function SeasonSection({data,params={}}:{data:AppData;params?:Record<stri
 }
 export function TeamCreateSection({data,params={}}:{data:AppData;params?:Record<string,string|undefined>}) {
  const {s,seasonInput}=context(data);
- return <section className="panel"><div className="section-heading"><h2>Team aanmaken</h2></div><form action={createTeam}>{seasonInput}<fieldset disabled={!s} className="stack-form"><Field label="Teamnaam" name="name"/><label>Leeftijdsklasse<select name="age"><option value="senior">Senioren</option><option value="youth">Jeugd</option></select></label><CompetitionLevelSelect id="new-team-competition"/><SubmitButton className="button">Team toevoegen</SubmitButton></fieldset></form><p className="muted small">Teams dit seizoen: {data.teams.map(t=>t.name).join(', ') || 'nog geen'}</p></section>;
+ return <section className="panel"><div className="section-heading"><h2>Team aanmaken</h2></div><form action={createTeam}>{seasonInput}<fieldset disabled={!s} className="stack-form"><Field label="Teamnaam" name="name"/><label>Leeftijdsklasse<select name="age"><option value="senior">Senioren</option><option value="youth">Jeugd</option></select></label><CompetitionLevelSelect id="new-team-competition"/><SubmitButton className="button">Team toevoegen</SubmitButton></fieldset></form></section>;
 }
 export function DutyCreateSection({data,refereePoints,fixedKind,returnTo}:{data:AppData;refereePoints:number|null;fixedKind?:'bar'|'event'|'other';returnTo?:string}) {
  const {s,seasonInput,teamOptions}=context(data);

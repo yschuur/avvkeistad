@@ -12,7 +12,7 @@ export type Team = { id: string; name: string; age_class: string; competition_le
 export type Match = { id:string;home_team:string;away_team:string;starts_at:string|null;location:string;level:string;club_referee:boolean;cancelled?:boolean;status?:string;address?:string|null;postal_code?:string|null;city?:string|null;court?:string|null;match_code?:string|null;source_url?:string|null;source_description?:string|null;referee_duties?:{id:string;kind:string;cancelled:boolean;points:number;assigned_team_id?:string|null}[] };
 export type SyncState={last_started_at:string|null;last_success_at:string|null;last_error_code:string|null;feed_published_at:string|null;imported_count:number;updated_count:number};
 export type Assignment = { id: string; member_id: string; points: number; title: string; definition_id?:string|null; group_id?:string|null };
-export type DataView = 'dashboard' | 'duties' | 'team' | 'teams' | 'management' | 'report' | 'matches' | 'managed-matches' | 'planning' | 'settings' | 'notifications' | 'profile';
+export type DataView = 'dashboard' | 'members' | 'duties' | 'team' | 'teams' | 'management' | 'report' | 'matches' | 'managed-matches' | 'planning' | 'settings' | 'notifications' | 'profile';
 // React cache is request-scoped: never share member data across users or requests.
 export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?:string,loadDutyMatches=false) => {
   if (!configured()) redirect('/login?error=' + encodeURIComponent('De applicatie is nog niet ingesteld. Neem contact op met de beheerder.'));
@@ -29,11 +29,11 @@ export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?
   const profile = profileResult.data as Profile | null;
   if (profileResult.error || !profile) throw new Error('Je account heeft nog geen ledenprofiel. Neem contact op met de beheerder.');
   if (seasonResult.error) throw new Error('Het actieve seizoen kon niet worden geladen. Controleer de database-inrichting.');
-  if ((view === 'management' || view === 'report' || view === 'settings' || view === 'teams' || view === 'managed-matches' || view==='planning') && profile.role === 'member') redirect('/');
+  if ((view === 'management' || view === 'members' || view === 'report' || view === 'settings' || view === 'teams' || view === 'managed-matches' || view==='planning') && profile.role === 'member') redirect('/');
   const season = seasonResult.data as Season | null;
   const seasonId = season?.id ?? '00000000-0000-0000-0000-000000000000';
   const teamView = ['team', 'teams', 'management', 'report','managed-matches','planning'].includes(view);
-  const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications' && view !== 'profile' && view !== 'teams';
+  const needDuties = view !== 'matches' && view !== 'settings' && view !== 'notifications' && view !== 'profile' && view !== 'teams' && view !== 'members';
   const month=view==='planning'?planningMonth(requestedMonth,season):null;
   const managedDuties=['management','managed-matches','planning'].includes(view);
   const needAssignments = ['dashboard', 'team', 'management', 'report'].includes(view);
@@ -55,7 +55,7 @@ export const getData = cache(async (view: DataView = 'dashboard',requestedMonth?
     needAssignments ? collectPages<Assignment>(async(from,to)=>{const r=await assignmentQuery.range(from,to);return {data:r.data as Assignment[]|null,count:r.count,error:r.error};}).catch(()=>{throw new Error('Functietoekenningen konden niet volledig worden opgehaald. Probeer opnieuw.');}) : empty,
     view==='duties'&&loadDutyMatches?collectPages<Match>(async(from,to)=>{const r=await db.from('matches').select('id,home_team,away_team,starts_at,status,cancelled,location,level,club_referee',{count:'exact'}).eq('season_id',seasonId).order('starts_at').order('id').range(from,to);return {data:r.data as Match[]|null,count:r.count,error:r.error};}):['management','planning','team'].includes(view)?collectPages<Match>(async(from,to)=>{const r=await db.from('matches').select('id,home_team,away_team,starts_at,status,cancelled,location,level,club_referee',{count:'exact'}).eq('season_id',seasonId).in('status',['scheduled','played']).eq('cancelled',false).order('starts_at').order('id').range(from,to);return {data:r.data as Match[]|null,count:r.count,error:r.error};}):['matches','managed-matches'].includes(view) ? collectPages<Match>(async(from,to)=>{const r=await db.from('matches').select('*, referee_duties:duties(id,kind,cancelled,points,assigned_team_id)',{count:'exact'}).eq('season_id',seasonId).order('starts_at',{nullsFirst:false}).order('id').range(from,to);return {data:r.data as Match[]|null,count:r.count,error:r.error};}) : empty,
     needDuties && view !== 'report' && view!=='planning' ? db.rpc('duty_availability') : empty,
-    view === 'management' ? db.from('function_definitions').select('*').eq('season_id', seasonId) : empty,
+    (view === 'management'||view==='members') ? db.from('function_definitions').select('*').eq('season_id', seasonId) : empty,
     db.from('notifications').select('id',{count:'exact',head:true}).eq('member_id',memberId).is('read_at',null),
     ['matches','managed-matches'].includes(view) ? db.from('nevobo_sync_state').select('last_started_at,last_success_at,last_error_code,feed_published_at,imported_count,updated_count') : empty,
   ]);

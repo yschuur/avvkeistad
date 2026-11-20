@@ -230,3 +230,10 @@ Deze meldingen gebruiken dezelfde persoonlijke inbox, ongelezen teller en geleze
 De zijbalk gebruikt `--sidebar-bg` en leesbare `--sidebar-text`/`--sidebar-muted`, afgeleid van de primaire clubkleur. Actieve navigatie heeft een licht gekleurd vlak met contrasterende tekst. `--highlight-bg`, `--on-highlight` en `--highlight-muted` bepalen de behaalde-puntenkaart op basis van de accentkleur. Deze tokens garanderen tekstcontrast, ook bij een witte of zwarte ingestelde clubkleur. Logo, naam, kleuren, cijfers en rollen blijven uit de bestaande configuratie/database komen; ontbrekende logo's houden het bestaande monogram. Er zijn geen nieuwe fictieve gegevens, fontrequests of visuele libraries.
 
 Dienstkaarten hebben neutrale typebadges, lichte punten- en beschikbaarheidsvlakken, een subtiele schaduw en een brede primaire knop. Knoppen op touchschermen blijven minstens 48px hoog. De bestaande vaste mobiele boven- en onderbalk, veilige schermranden, drawer, focusbediening en responsive beheertabellen blijven behouden. Nieuwe functionele iconen komen uit de bestaande lucide-react-library.
+
+
+## Ledenpaginering en teambeheer
+
+Beheer → Leden vraagt per pagina maximaal 25 profielen op, met een exacte resultaattelling zonder alle profielen te laden. Naam/e-mail zoeken en teamfilter (ook Geen team) worden vóór paginering in de database toegepast. Voor- en achternaam kunnen samen worden gezocht. Vorige/Volgende, paginanummers en directe paginakeuze behouden de filters; een nieuw filter begint op pagina 1. Een direct geopend lid buiten de pagina wordt afzonderlijk opgehaald voor Lid instellen en verschijnt niet als extra tabelrij. Alleen functietoekenningen voor de geladen leden worden opgehaald; dienstgegevens en volledige ledenlijsten worden op deze route niet geladen. Beheerrechten en RLS blijven ongewijzigd.
+
+Beheer → Teams begint met Team aanmaken links en Fluitregels rechts. Op mobiel (≤768px) staan deze onder elkaar, met Team aanmaken eerst. De opsomming Teams dit seizoen vervalt uit het aanmaakpaneel; de echte teamlijst en het seizoenaantal blijven eronder beschikbaar.

@@ -863,3 +863,7 @@ h3 { font-size: 19px; }
  .dashboard-layout .member-function-groups > .muted { grid-column: 1 / -1; }
 }
 .sidebar .mode-switch:hover:not(:disabled) { background: transparent; border-color: var(--sidebar-muted); }
+
+.team-management-top { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); align-items: start; gap: var(--space-5); margin-bottom: var(--space-5); }
+.team-management-top > .panel { min-width: 0; margin-bottom: 0; }
+@media(max-width:768px) { .team-management-top { grid-template-columns: minmax(0,1fr); } }
