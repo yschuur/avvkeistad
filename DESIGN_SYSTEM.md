@@ -252,3 +252,10 @@ Informatieknoppen staan alleen bij Mijn punten (berekening en onderscheid tussen
 InfoButton is een benoemde i-knop die een native modaal uitlegvenster opent. Het venster staat via een portal buiten koppen/formulieren, heeft een titel, sluitknoppen en sluit op Escape of een klik buiten het venster. Focus blijft in het venster en keert terug naar de knop; mobiel is het raakvlak minimaal 44px. Geen hover-only uitleg of nieuwe bibliotheek.
 
 Inschrijven en Overnemen openen eerst een bevestiging met Weet je het zeker, dienstnaam, datum/tijd en de betekenis van één plek op je nemen. Annuleren en Escape wijzigen niets. Alleen Ja, inschrijven/Ja, overnemen verstuurt het bestaande formulier met dezelfde dienst-, overname- en retourgegevens. De primaire bevestiging is in clubkleur; bestaande destructieve bevestigingen behouden hun rode knop. Rechten, inschrijfregels en punten veranderen niet.
+
+
+## Context voor beheerders
+
+Beheer gebruikt dezelfde InfoButton naast de paginatitel: starten op het dashboard, ledeninstellingen (norm en aanvoerder), teams (leeftijdsklasse versus competitieniveau), diensten/planning (teamreservering versus persoon inplannen en filterbetekenis), functies en functiegroepen (vaste punten en doorwerking), seizoenen (activeren), rapportage (puntencategorieën) en wedstrijden (Nevobo versus handmatig beheer). De drie dienstsoortpagina’s delen dezelfde uitleg als Planning. Wedstrijduitleg verschijnt uitsluitend in de beheerweergave. Teksten staan centraal in lib/admin-help.ts en beschrijven uitsluitend bestaande regels.
+
+Dit is optionele uitleg op klik/tik, geen extra stap voor een beheeractie. Bestaande formulieren, waarschuwingen, bevestigingen en blokkaderedenen blijven zichtbaar en ongewijzigd. Er komen geen extra iconen bij velden die al voldoende toelichting hebben.

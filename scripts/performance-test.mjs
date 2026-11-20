@@ -325,6 +325,27 @@ try {
  assert.equal(await page.getByRole('button',{name:/Inloggen/}).isDisabled(),true);
  await page.waitForURL(base+'/');await page.getByText('Anna Test',{exact:true}).first().waitFor();
 
+ { // Admin context stays read-only, keyboard accessible and responsive on every management route.
+ const helpAdmin=await browser.newPage();helpAdmin.setDefaultTimeout(10000);await helpAdmin.goto(base+'/login');await helpAdmin.getByLabel('E-mailadres').fill('admin@example.test');await helpAdmin.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');await helpAdmin.getByRole('button',{name:'Inloggen',exact:true}).click();await helpAdmin.waitForURL(base+'/');
+ const topics=[['/beheer','Beheer starten'],['/beheer/leden','Leden beheren'],['/beheer/teams','Teams en niveaus beheren'],['/beheer/planning','Diensten beheren'],['/beheer/bardiensten','Diensten beheren'],['/beheer/evenementen','Diensten beheren'],['/beheer/overige-diensten','Diensten beheren'],['/beheer/functies','Functies en punten'],['/beheer/functiegroepen','Functiegroepen en punten'],['/beheer/seizoenen','Seizoenen beheren'],['/beheer/rapportage','Puntenrapportage'],['/beheer/wedstrijden','Wedstrijden beheren']];
+ if(process.env.SCREENSHOT_DIR)await mkdir(process.env.SCREENSHOT_DIR,{recursive:true});
+ for(const width of [320,390,1440]) {
+  await helpAdmin.setViewportSize({width,height:900});
+  for(const [path,topic] of topics) {
+   await helpAdmin.goto(base+path,{waitUntil:'networkidle'});const initialUrl=helpAdmin.url(),writeCount=records.filter(r=>r.method==='POST').length;
+   const trigger=helpAdmin.getByRole('button',{name:'Uitleg over '+topic,exact:true});await trigger.click();const dialog=helpAdmin.getByRole('dialog',{name:topic,exact:true});await dialog.waitFor();
+   assert.ok((await dialog.locator('.info-dialog-body').textContent()).length>100);assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
+   const bounds=await dialog.boundingBox();assert.ok(bounds.x>=0&&bounds.x+bounds.width<=width+1);assert.ok(bounds.y>=0&&bounds.y+bounds.height<=901);
+   await helpAdmin.keyboard.press('Tab');assert.equal(await dialog.evaluate(el=>el.contains(document.activeElement)),true);
+   if(process.env.SCREENSHOT_DIR&&path==='/beheer/planning')await helpAdmin.screenshot({path:`${process.env.SCREENSHOT_DIR}/beheer-uitleg-${width}.png`});
+   await helpAdmin.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});assert.equal(await trigger.evaluate(el=>document.activeElement===el),true);await helpAdmin.waitForFunction(el=>el.getAttribute('aria-expanded')==='false',await trigger.elementHandle());
+   await trigger.click();await dialog.getByRole('button',{name:'Sluiten',exact:true}).click();await dialog.waitFor({state:'hidden'});
+   assert.equal(helpAdmin.url(),initialUrl);assert.equal(records.filter(r=>r.method==='POST').length,writeCount,'Uitleg mag geen beheeractie versturen');
+  }
+ }
+ await helpAdmin.close();console.log('Beheeruitleg geslaagd: 12 routes, mobiel/desktop, dialooggrenzen, focus, Escape, sluiten en geen schrijfacties.');
+ }
+
  // Member directory: backend paging, preserved search, direct member editing, and team-panel ordering.
  const directoryAdmin=await browser.newPage();directoryAdmin.setDefaultTimeout(10000);await directoryAdmin.goto(base+'/login');await directoryAdmin.getByLabel('E-mailadres').fill('admin@example.test');await directoryAdmin.getByLabel('Wachtwoord',{exact:true}).fill('local-test-password');await directoryAdmin.getByRole('button',{name:'Inloggen',exact:true}).click();await directoryAdmin.waitForURL(base+'/');await directoryAdmin.getByRole('heading',{name:'Mijn overzicht',exact:true}).waitFor();await directoryAdmin.waitForLoadState('networkidle');
  const directoryMembers=Array.from({length:66},(_,i)=>{const id=`12000000-0000-4000-8000-${String(i+1).padStart(12,'0')}`;return {...profile(memberA),id,first_name:`Lid${String(i).padStart(3,'0')}`,last_name:i>=60?'Zoekgroep':'Paginatest',email:`lijst${i}@example.test`,role:'member',memberships:i%3===0?[]:[{member_id:id,season_id:season,team_id:teamId,captain:false,norm_override:null}]};});

@@ -1,3 +1,5 @@
+import { InfoButton } from '@/components/info-button';
+import { adminHelp } from '@/lib/admin-help';
 import { AvailableTeamSelect } from '@/components/available-team-select';
 import { PageNavigation } from '@/components/page-navigation';
 import { DutyManagement } from '@/components/management/duty-management';
@@ -39,7 +41,7 @@ export default async function MatchesPage({searchParams,management=false}:{searc
  const pageUrl=(target:number)=>matchFilterUrl(filters,{page:target});
  const sync=data.syncState;
  const stale=sync?.last_success_at && now.getTime()-new Date(sync.last_success_at).getTime()>5*3600000;
- return <Shell data={data}><Heading title="Wedstrijden" description={management?'Thuiswedstrijden van AVV Keistad':undefined}>{manager && <Link className="button secondary" href={`${base}/log`}>Wijzigingslog</Link>}{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>{manager&&!settings?.available&&<p className="notice warning">Voer migratie 008 uit voor teamtoewijzing en standaardpunten voor fluitdiensten.</p>}
+ return <Shell data={data}><Heading help={management?<InfoButton topic="Wedstrijden beheren">{adminHelp.matches}</InfoButton>:undefined} title="Wedstrijden" description={management?'Thuiswedstrijden van AVV Keistad':undefined}>{manager && <Link className="button secondary" href={`${base}/log`}>Wijzigingslog</Link>}{manager && <form action={syncNevobo}><SubmitButton className="button">Nu synchroniseren</SubmitButton></form>}{manager && emailConfigured && <form action={testMatchNotifications}><SubmitButton className="button secondary">Testmelding naar mij</SubmitButton></form>}<a href={NEVOBO_PROGRAM_URL} target="_blank" rel="noreferrer" className="button secondary">Nevobo-bron</a></Heading><Notice params={params}/>{manager&&!settings?.available&&<p className="notice warning">Voer migratie 008 uit voor teamtoewijzing en standaardpunten voor fluitdiensten.</p>}
   <div className="sync-meta">{sync?.last_success_at?<span>Laatste import: {date(sync.last_success_at)} · {time(sync.last_success_at)}</span>:<span>Nog niet gesynchroniseerd.</span>}</div>
   {manager&&data.season&&<MatchDutyPeriodForm season={data.season.id} today={new Date().toLocaleDateString('sv-SE',{timeZone:'Europe/Amsterdam'})} available={Boolean(settings?.available)} points={settings?.available?settings.refereePoints:null}/>}
   {(stale || (manager && sync?.last_error_code)) && <p className="notice warning" role="alert">De wedstrijdgegevens zijn mogelijk verouderd. De laatste automatische synchronisatie moet worden gecontroleerd.</p>}
